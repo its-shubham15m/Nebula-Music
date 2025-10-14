@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="purple_200">#FFBB86FC</color>
+    <color name="purple_500">#FF6200EE</color>
+    <color name="purple_700">#FF3700B3</color>
+    <color name="shuffle_card_background">#F5F5F5</color>
+
+    <color name="teal_200">#FF03DAC5</color>
+    <color name="teal_700">#FF018786</color>
+
+    <!-- Primary Colors -->
+    <color name="colorPrimary">#FF8F87F1</color>
+    <color name="colorPrimaryVariant">#FF3700B3</color>
+    <color name="colorSecondary">#FF03DAC5</color>
+    <color name="colorSecondaryVariant">#FF018786</color>
+
+    <!-- ADDED: Primary Container Colors -->
+    <color name="colorPrimaryContainer">#FF33A1E0</color>
+    <color name="colorOnPrimaryContainer">#FF000000</color>
+
+    <!-- Surface Colors - Light Theme -->
+    <color name="colorBackground">#FFFFFFFF</color>
+    <color name="colorSurface">#FFFFFFFF</color>
+
+    <!-- On Colors (Text/Icon colors on top of base colors) -->
+    <color name="colorOnPrimary">#000000</color>
+    <color name="colorOnSecondary">#000000</color>
+    <color name="colorOnBackground">#000000</color>
+    <color name="colorOnSurface">#000000</color>
+
+    <!-- Material Design Dark Theme Colors -->
+    <color name="md_dark_background">#F2F2F2</color>
+    <color name="md_dark_onBackground">#FFFFFF</color>
+    <color name="md_dark_surface">#1E1E1E</color>
+    <color name="md_dark_onSurface">#FFFFFF</color>
+
+    <!-- Basic Colors -->
+    <color name="white">#FFFFFFFF</color>
+    <color name="black">#FF000000</color>
+    <color name="grey_light">#FF757575</color>
+    <color name="grey_dark">#FF424242</color>
+
+    <!-- Primary Color (using the light purple from your scheme) -->
+    <color name="primary_color">#FFBB86FC</color>
+
+    <!-- Additional colors for better UI contrast -->
+    <color name="primary_light">#FFE9DDFF</color>
+    <color name="primary_dark">#FF8A61C9</color>
+
+    <!-- Status and accent colors -->
+    <color name="colorRed">#FFCF6679</color>
+    <color name="colorOnRed">#FF000000</color>
+
+    <!-- Player controls and progress colors -->
+    <color name="player_accent">#FF03DAC5</color>
+    <color name="progress_background">#4D000000</color>
+    <color name="progress_foreground">#FFBB86FC</color>
+
+    <!-- Card and item backgrounds -->
+    <color name="card_background">#FFFFFFFF</color>
+    <color name="item_background">#FFF5F5F5</color>
+    <color name="selected_item">#334D4D4D</color>
+
+    <!-- Text colors -->
+    <color name="text_primary">#FF000000</color>
+    <color name="text_secondary">#FF757575</color>
+    <color name="text_hint">#FF757575</color>
+    <color name="error_red">#FFFF0000</color>
+
+    <!-- Dialog and UI specific colors -->
+    <color name="button_positive">#FF6200EE</color>
+    <color name="button_negative">#FF757575</color>
+
+    <!-- Dialog background -->
+    <color name="dialog_background">#FFFFFFFF</color>
+    <color name="switch_track_color">#FFAAAAAA</color>
+    <color name="switch_thumb_color">#FFFFFFFF</color>
+</resources>

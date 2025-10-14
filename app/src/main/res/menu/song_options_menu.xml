@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/menu_title"
+        android:title="Song Title"
+        android:enabled="false"
+        android:titleTextColor="?attr/colorPrimary"/>
+
+    <item
+        android:id="@+id/menu_toggle_favorite"
+        android:title="Add to Favorites"/>
+
+    <item
+        android:id="@+id/menu_play"
+        android:title="Play"/>
+    <item
+        android:id="@+id/menu_add_to_queue"
+        android:title="Add to Queue"/>
+    <item
+        android:id="@+id/menu_add_to_playlist"
+        android:title="Add to Playlist"/>
+    <item
+        android:id="@+id/menu_delete"
+        android:title="Delete"/>
+    <item
+        android:id="@+id/menu_share"
+        android:title="Share"/>
+</menu>

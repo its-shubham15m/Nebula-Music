@@ -1,0 +1,21 @@
+<resources>
+    <string name="app_name">Nebula Music</string>
+    <string name="album_art" />
+    <string name="favorite" />
+    <string name="previous" />
+    <string name="play_pause" />
+    <string name="next" />
+    <string name="close" />
+    <string name="menu_add_favorite">Add to Favorites</string>
+    <string name="menu_remove_favorite">Remove from Favorites</string>
+
+    <plurals name="song_count_plurals">
+        <item quantity="one">%d song</item>
+        <item quantity="other">%d songs</item>
+    </plurals>
+
+    <plurals name="playlist_count_plurals">
+        <item quantity="one">%d playlist</item>
+        <item quantity="other">%d playlists</item>
+    </plurals>
+</resources>

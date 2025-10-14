@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:padding="8dp">
+
+    <com.google.android.material.imageview.ShapeableImageView
+        android:id="@+id/item_album_art"
+        android:layout_width="50dp"
+        android:layout_height="50dp"
+        android:scaleType="centerCrop"
+        android:src="@drawable/default_album_art"
+
+        app:shapeAppearanceOverlay="@style/ShapeAppearance.App.CornerRoundSmall"
+
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <TextView
+        android:id="@+id/item_title"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="Song title"
+        android:textStyle="bold"
+        android:layout_marginStart="8dp"
+        android:textColor="?attr/colorOnSurface"
+        app:layout_constraintStart_toEndOf="@id/item_album_art"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintEnd_toStartOf="@+id/item_options" />
+
+    <TextView
+        android:id="@+id/item_artist"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="Artist"
+        android:layout_marginStart="8dp"
+        android:textColor="?attr/colorOnSurfaceVariant"
+        app:layout_constraintStart_toEndOf="@id/item_album_art"
+        app:layout_constraintTop_toBottomOf="@id/item_title"
+        app:layout_constraintEnd_toStartOf="@+id/item_options" />
+
+    <ImageView
+        android:id="@+id/item_options"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:src="@drawable/ic_options"
+        android:contentDescription="Options"
+        app:tint="?attr/colorOnSurface"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

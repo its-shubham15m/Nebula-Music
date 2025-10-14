@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Override colors for dark theme -->
+    <color name="shuffle_card_background">#2D2D2D</color>
+
+    <!-- Primary Colors for Dark Mode -->
+    <color name="colorPrimary">#FF8F87F1</color>
+    <color name="colorPrimaryVariant">#FF3700B3</color>
+    <color name="colorSecondary">#FF03DAC5</color>
+    <color name="colorSecondaryVariant">#FF018786</color>
+
+    <!-- ADDED: Primary Container Colors for Dark Mode -->
+    <color name="colorPrimaryContainer">#FF4E56C0</color>
+    <color name="colorOnPrimaryContainer">#FFFFFFFF</color>
+
+    <!-- Surface Colors for Dark Mode - Exact match with your app background -->
+    <color name="colorBackground">#FF121212</color>
+    <color name="colorSurface">#FF1E1E1E</color>
+
+    <!-- On Colors for Dark Mode -->
+    <color name="colorOnPrimary">#000000</color>
+    <color name="colorOnSecondary">#000000</color>
+    <color name="colorOnBackground">#FFFFFF</color>
+    <color name="colorOnSurface">#FFFFFF</color>
+    <color name="md_dark_background">#222831</color>
+
+    <!-- Text colors for dark mode -->
+    <color name="text_primary">#FFFFFFFF</color>
+    <color name="text_secondary">#CCFFFFFF</color>
+    <color name="text_hint">#80FFFFFF</color>
+
+    <!-- Basic colors for dark mode -->
+    <color name="white">#FFFFFFFF</color>
+    <color name="black">#FF000000</color>
+    <color name="grey_light">#FF757575</color>
+    <color name="grey_dark">#FF424242</color>
+
+    <!-- Card backgrounds for dark mode -->
+    <color name="card_background">#FF2D2D2D</color>
+    <color name="item_background">#FF262626</color>
+
+    <!-- Progress background for dark mode -->
+    <color name="progress_background">#4DFFFFFF</color>
+    <color name="progress_foreground">#FFBB86FC</color>
+
+    <!-- Dialog background for dark mode -->
+    <color name="dialog_background">#FF1E1E1E</color>
+
+    <!-- Player controls and progress colors for dark mode -->
+    <color name="player_accent">#FF03DAC5</color>
+    <color name="selected_item">#334D4D4D</color>
+
+    <!-- Dialog and UI specific colors for dark mode -->
+    <color name="button_positive">#FFBB86FC</color>
+    <color name="button_negative">#FF757575</color>
+</resources>
