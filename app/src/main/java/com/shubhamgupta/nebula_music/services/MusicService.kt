@@ -386,7 +386,8 @@ class MusicService : Service(), MediaPlayer.OnCompletionListener, MediaPlayer.On
                 isRestoringState = true
                 restoreSeekPosition = state.lastSeekPosition
 
-                SongCacheManager.initializeCache(applicationContext)
+                // This no longer requires its own cache initialization
+                // SongCacheManager.initializeCache(applicationContext)
 
                 repeatMode = MusicService.RepeatMode.entries.getOrNull(state.repeatMode) ?: MusicService.RepeatMode.ALL
                 isShuffleMode = state.isShuffleMode
@@ -395,6 +396,8 @@ class MusicService : Service(), MediaPlayer.OnCompletionListener, MediaPlayer.On
                 if (state.queueSongIds.isNotEmpty() || state.originalQueueSongIds.isNotEmpty()) {
                     Log.d("MusicService", "Reconstructing queues...")
 
+                    // OPTIMIZED: Reconstructing the queue from IDs is now lightning-fast
+                    // because getSongById is just a HashMap lookup.
                     originalSongList = if (state.originalQueueSongIds.isNotEmpty()) {
                         state.originalQueueSongIds.mapNotNull { id ->
                             SongCacheManager.getSongById(id)
@@ -412,6 +415,8 @@ class MusicService : Service(), MediaPlayer.OnCompletionListener, MediaPlayer.On
                     }
 
                     Log.d("MusicService", "Reconstructed queues - Current: ${currentQueue.size}, Original: ${originalSongList.size}")
+
+                    // ... (rest of the method continues as is)
 
                     songList = if (isShuffleMode) {
                         ArrayList(currentQueue)

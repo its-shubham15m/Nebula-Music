@@ -6,6 +6,7 @@ import android.provider.MediaStore
 import android.util.Log
 import com.shubhamgupta.nebula_music.models.Song
 import com.shubhamgupta.nebula_music.utils.PreferenceManager
+import com.shubhamgupta.nebula_music.utils.SongCacheManager
 
 object SongRepository {
 
@@ -93,6 +94,6 @@ object SongRepository {
             Log.e("SongRepository", "Error loading songs", e)
         }
 
-        return songs
+        return SongCacheManager.getAllSongs()
     }
 }
