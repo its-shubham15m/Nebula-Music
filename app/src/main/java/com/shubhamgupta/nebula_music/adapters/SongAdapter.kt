@@ -11,13 +11,74 @@ import com.bumptech.glide.Glide
 import com.shubhamgupta.nebula_music.R
 import com.shubhamgupta.nebula_music.models.Song
 import com.shubhamgupta.nebula_music.utils.SongUtils
+import android.widget.SectionIndexer
+import android.util.SparseArray
 
 class SongAdapter(
     private val songs: List<Song>,
     private val onItemClick: (position: Int) -> Unit,
     private val onMenuClick: (position: Int, menuItem: String) -> Unit,
     private val isSongFavorite: (songId: Long) -> Boolean = { false }
-) : RecyclerView.Adapter<SongAdapter.SongVH>() {
+) : RecyclerView.Adapter<SongAdapter.SongVH>(), SectionIndexer {
+
+    private var sections: SparseArray<Int> = SparseArray()
+    private var sectionLetters: MutableList<String> = mutableListOf()
+
+    init {
+        setupSections()
+    }
+
+    private fun setupSections() {
+        sections.clear()
+        sectionLetters.clear()
+
+        if (songs.isNotEmpty()) {
+            var sectionStart = 0
+            var currentSection = songs[0].title[0].uppercaseChar()
+
+            for (i in songs.indices) {
+                val firstChar = songs[i].title[0].uppercaseChar()
+                if (firstChar != currentSection) {
+                    sections.put(currentSection.toInt(), sectionStart)
+                    sectionLetters.add(currentSection.toString())
+                    currentSection = firstChar
+                    sectionStart = i
+                }
+            }
+            // Add the last section
+            sections.put(currentSection.toInt(), sectionStart)
+            sectionLetters.add(currentSection.toString())
+        }
+    }
+
+    override fun getSections(): Array<String> {
+        return sectionLetters.toTypedArray()
+    }
+
+    override fun getPositionForSection(sectionIndex: Int): Int {
+        return if (sectionIndex < sectionLetters.size) {
+            val sectionChar = sectionLetters[sectionIndex][0]
+            sections.get(sectionChar.toInt(), 0)
+        } else {
+            0
+        }
+    }
+
+    override fun getSectionForPosition(position: Int): Int {
+        var section = 0
+        for (i in sectionLetters.indices) {
+            if (getPositionForSection(i) <= position) {
+                section = i
+            }
+        }
+        return section
+    }
+
+    fun updateSongs(newSongs: List<Song>) {
+        // Note: This method signature doesn't match current usage, but keeping for compatibility
+        setupSections()
+        notifyDataSetChanged()
+    }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): SongVH {
         val view = LayoutInflater.from(parent.context)

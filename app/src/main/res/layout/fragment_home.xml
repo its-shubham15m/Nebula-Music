@@ -13,12 +13,11 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        android:scrollbars="vertical"
+        android:scrollbars="none"
         app:fastScrollEnabled="true"
         app:fastScrollHorizontalThumbDrawable="@drawable/fast_scroller_thumb"
         app:fastScrollHorizontalTrackDrawable="@drawable/fast_scroller_track"
         app:fastScrollVerticalThumbDrawable="@drawable/fast_scroller_thumb"
-        app:fastScrollVerticalTrackDrawable="@drawable/fast_scroller_track"
-    />
+        app:fastScrollVerticalTrackDrawable="@drawable/fast_scroller_track" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
