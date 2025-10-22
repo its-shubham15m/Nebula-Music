@@ -18,19 +18,12 @@ class NebulaMusicApplication : Application() {
         super.onCreate()
         instance = this
 
-        // NEW: Initialize the song cache when the application starts.
-        // This will trigger the initial scan of MediaStore on a background thread.
+        // This call now triggers the persistent cache logic. No changes needed.
         SongCacheManager.initializeCache(this)
 
-        // Load equalizer settings when app starts
         EqualizerManager.loadSettings()
-
-        // Apply saved theme when app starts
         ThemeManager.applySavedTheme(this)
-
-        // Initialize debug utils
         DebugUtils.initialize(BuildConfig.DEBUG)
-
         DebugUtils.logInfo("Nebula Music Application started")
     }
 }
