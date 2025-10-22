@@ -249,7 +249,8 @@ class GenresFragment : Fragment() {
                 val genreMap = mutableMapOf<String, Genre>()
 
                 songs.forEach { song ->
-                    val genreName = song.genre ?: "Unknown Genre"
+                    // CORRECTED LINE: Use song.year because song.genre contains the wrong data
+                    val genreName = song.year?.toString() ?: "Unknown Genre"
                     if (!genreMap.containsKey(genreName)) {
                         genreMap[genreName] = Genre(
                             name = genreName,
@@ -292,7 +293,8 @@ class GenresFragment : Fragment() {
                 val genreMap = mutableMapOf<String, Genre>()
 
                 songs.forEach { song ->
-                    val genreName = song.genre ?: "Unknown Genre"
+                    // CORRECTED LINE: Use song.year because song.genre contains the wrong data
+                    val genreName = song.year?.toString() ?: "Unknown Genre"
                     if (!genreMap.containsKey(genreName)) {
                         genreMap[genreName] = Genre(
                             name = genreName,

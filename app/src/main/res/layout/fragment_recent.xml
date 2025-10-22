@@ -9,7 +9,6 @@
     android:background="@color/colorBackground"
     android:fitsSystemWindows="true">
 
-    <!-- Back Button and Title -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -42,7 +41,6 @@
             android:layout_marginEnd="16dp"/>
     </LinearLayout>
 
-    <!-- Shuffle All Card and Action Buttons -->
     <RelativeLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -119,15 +117,19 @@
         </LinearLayout>
     </RelativeLayout>
 
-    <!-- RecyclerView with proper weight distribution -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recycler_view_recent"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:layout_marginTop="8dp"/>
+        android:layout_marginTop="8dp"
+        android:scrollbars="none"
+        app:fastScrollEnabled="true"
+        app:fastScrollHorizontalThumbDrawable="@drawable/fast_scroller_thumb"
+        app:fastScrollHorizontalTrackDrawable="@drawable/fast_scroller_track"
+        app:fastScrollVerticalThumbDrawable="@drawable/fast_scroller_thumb"
+        app:fastScrollVerticalTrackDrawable="@drawable/fast_scroller_track"/>
 
-    <!-- Empty State Message -->
     <TextView
         android:id="@+id/tv_empty_recent"
         android:layout_width="wrap_content"
