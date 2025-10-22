@@ -4,10 +4,12 @@ import android.app.Service
 import android.content.Intent
 import android.media.MediaPlayer
 import android.os.Binder
+import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.support.v4.media.session.MediaSessionCompat
+import android.support.v4.media.session.PlaybackStateCompat
 import android.util.Log
 import com.shubhamgupta.nebula_music.R
 import com.shubhamgupta.nebula_music.models.Song
@@ -56,6 +58,9 @@ class MusicService : Service(), MediaPlayer.OnCompletionListener, MediaPlayer.On
     private companion object {
         const val QUEUE_VISIBLE_RANGE = 10
         const val QUEUE_PRELOAD_RANGE = 5
+        // NEW: Constants for custom media session actions
+        const val CUSTOM_ACTION_TOGGLE_REPEAT = "com.shubhamgupta.nebula_music.ACTION_TOGGLE_REPEAT"
+        const val CUSTOM_ACTION_TOGGLE_FAVORITE = "com.shubhamgupta.nebula_music.ACTION_TOGGLE_FAVORITE"
     }
 
     fun getAudioSessionId(): Int {
@@ -126,6 +131,14 @@ class MusicService : Service(), MediaPlayer.OnCompletionListener, MediaPlayer.On
 
                 override fun onSkipToPrevious() {
                     playPrevious("NONE")
+                }
+
+                // NEW: Handle custom actions sent by the System UI on Android 14+
+                override fun onCustomAction(action: String, extras: Bundle?) {
+                    when (action) {
+                        CUSTOM_ACTION_TOGGLE_REPEAT -> toggleRepeatMode()
+                        CUSTOM_ACTION_TOGGLE_FAVORITE -> toggleFavorite()
+                    }
                 }
             })
             isActive = true
@@ -656,6 +669,7 @@ class MusicService : Service(), MediaPlayer.OnCompletionListener, MediaPlayer.On
     }
 
     fun toggleRepeatMode() {
+        // Cycle through the three modes: ALL -> ONE -> SHUFFLE -> ALL
         repeatMode = when (repeatMode) {
             RepeatMode.ALL -> RepeatMode.ONE
             RepeatMode.ONE -> RepeatMode.SHUFFLE
@@ -664,12 +678,35 @@ class MusicService : Service(), MediaPlayer.OnCompletionListener, MediaPlayer.On
 
         isShuffleMode = (repeatMode == RepeatMode.SHUFFLE)
 
-        if (repeatMode == RepeatMode.SHUFFLE && !isShuffleMode) {
-            toggleShuffle()
-        } else if (repeatMode != RepeatMode.SHUFFLE && isShuffleMode) {
-            toggleShuffle()
+        // Apply or revert shuffle based on the new mode
+        val currentSong = getCurrentSong()
+        if (isShuffleMode) {
+            // Shuffle is ON: shuffle the song list but keep the current song playing
+            val tempList = ArrayList(originalSongList)
+            currentSong?.let { song ->
+                tempList.remove(song)
+                Collections.shuffle(tempList)
+                tempList.add(0, song)
+                songList = tempList
+                songPosition = 0
+            } ?: Collections.shuffle(tempList)
+
+        } else {
+            // Shuffle is OFF: revert to the original, non-shuffled list
+            songList = ArrayList(originalSongList)
+            currentSong?.let { song ->
+                // Find the current song's position in the original list
+                val newPosition = songList.indexOfFirst { it.id == song.id }
+                if (newPosition != -1) songPosition = newPosition
+            }
         }
 
+        // Sync the current queue with the updated song list
+        currentQueue = ArrayList(songList)
+        currentQueuePosition = songPosition
+
+        verifyQueueSync()
+        updateMediaSessionState() // CRITICAL: Update the session with the new state
         notificationManager.updateNotification(this, getCurrentSong(), isPlaying(), repeatMode)
         sendBroadcast(Intent("PLAYBACK_MODE_CHANGED"))
         Log.d("MusicService", "Repeat mode changed to: $repeatMode, Shuffle: $isShuffleMode")
@@ -685,6 +722,7 @@ class MusicService : Service(), MediaPlayer.OnCompletionListener, MediaPlayer.On
             PreferenceManager.removeFavorite(applicationContext, currentSong.id)
         }
 
+        updateMediaSessionState() // CRITICAL: Update the session with the new state
         sendBroadcast(Intent("SONG_CHANGED"))
         notificationManager.updateNotification(this, getCurrentSong(), isPlaying(), repeatMode)
     }
@@ -779,23 +817,54 @@ class MusicService : Service(), MediaPlayer.OnCompletionListener, MediaPlayer.On
 
     private fun updateMediaSessionState() {
         val state = when {
-            !isPrepared -> android.support.v4.media.session.PlaybackStateCompat.STATE_NONE
-            isPlaying() -> android.support.v4.media.session.PlaybackStateCompat.STATE_PLAYING
-            else -> android.support.v4.media.session.PlaybackStateCompat.STATE_PAUSED
+            !isPrepared -> PlaybackStateCompat.STATE_NONE
+            isPlaying() -> PlaybackStateCompat.STATE_PLAYING
+            else -> PlaybackStateCompat.STATE_PAUSED
         }
 
         val position = getCurrentPosition().toLong()
 
-        val playbackStateBuilder = android.support.v4.media.session.PlaybackStateCompat.Builder()
+        val playbackStateBuilder = PlaybackStateCompat.Builder()
             .setActions(
-                android.support.v4.media.session.PlaybackStateCompat.ACTION_PLAY or
-                        android.support.v4.media.session.PlaybackStateCompat.ACTION_PAUSE or
-                        android.support.v4.media.session.PlaybackStateCompat.ACTION_PLAY_PAUSE or
-                        android.support.v4.media.session.PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
-                        android.support.v4.media.session.PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
-                        android.support.v4.media.session.PlaybackStateCompat.ACTION_SEEK_TO
+                PlaybackStateCompat.ACTION_PLAY or
+                        PlaybackStateCompat.ACTION_PAUSE or
+                        PlaybackStateCompat.ACTION_PLAY_PAUSE or
+                        PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
+                        PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
+                        PlaybackStateCompat.ACTION_SEEK_TO
             )
             .setState(state, position, 1.0f)
+
+        // NEW: Add custom actions to inform the system UI about your extra buttons.
+        // This is the key to making them appear on Android 14+.
+
+        // Custom Action for the 3-state Repeat/Shuffle button
+        val (repeatIcon, repeatTitle) = when (repeatMode) {
+            RepeatMode.ONE -> Pair(R.drawable.repeat_one, "Repeat One")
+            RepeatMode.SHUFFLE -> Pair(R.drawable.shuffle, "Shuffle")
+            else -> Pair(R.drawable.repeat, "Repeat All")
+        }
+        playbackStateBuilder.addCustomAction(
+            PlaybackStateCompat.CustomAction.Builder(
+                CUSTOM_ACTION_TOGGLE_REPEAT,
+                repeatTitle,
+                repeatIcon
+            ).build()
+        )
+
+        // Custom Action for the Favorite button
+        getCurrentSong()?.let {
+            val isFavorite = PreferenceManager.isFavorite(applicationContext, it.id)
+            val favoriteIcon = if (isFavorite) R.drawable.ic_favorite_filled else R.drawable.ic_favorite_outline
+            val favoriteTitle = if (isFavorite) "Unfavorite" else "Favorite"
+            playbackStateBuilder.addCustomAction(
+                PlaybackStateCompat.CustomAction.Builder(
+                    CUSTOM_ACTION_TOGGLE_FAVORITE,
+                    favoriteTitle,
+                    favoriteIcon
+                ).build()
+            )
+        }
 
         mediaSession.setPlaybackState(playbackStateBuilder.build())
     }
