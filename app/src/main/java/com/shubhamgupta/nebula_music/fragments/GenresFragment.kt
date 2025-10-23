@@ -21,14 +21,12 @@ import com.shubhamgupta.nebula_music.MainActivity
 import com.shubhamgupta.nebula_music.R
 import com.shubhamgupta.nebula_music.adapters.GenreAdapter
 import com.shubhamgupta.nebula_music.models.Genre
-import com.shubhamgupta.nebula_music.models.Song
 import com.shubhamgupta.nebula_music.repository.SongRepository
 import com.shubhamgupta.nebula_music.utils.PreferenceManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class GenresFragment : Fragment() {
 
@@ -86,7 +84,7 @@ class GenresFragment : Fragment() {
     }
 
     fun restoreScrollState() {
-        if (this::recyclerView.isInitialized && scrollPosition > 0) {
+        if (this::recyclerView.isInitialized) {
             val layoutManager = recyclerView.layoutManager as? LinearLayoutManager
             layoutManager?.let {
                 handler.postDelayed({
@@ -137,11 +135,12 @@ class GenresFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        showLoading()
-        // Proactively load data when the view is created for better reliability
-        handler.postDelayed({
-            loadGenres()
-        }, 100)
+        if (genreList.isNotEmpty()) {
+            updateAdapter()
+            restoreScrollState()
+        } else {
+            showLoading()
+        }
     }
 
     override fun onResume() {
@@ -155,11 +154,8 @@ class GenresFragment : Fragment() {
             requireActivity().registerReceiver(sortReceiver, sortFilter, Context.RECEIVER_NOT_EXPORTED)
             requireActivity().registerReceiver(refreshReceiver, refreshFilter, Context.RECEIVER_NOT_EXPORTED)
         } else {
-            @Suppress("UnspecifiedRegisterReceiverFlag")
             requireActivity().registerReceiver(searchReceiver, searchFilter)
-            @Suppress("UnspecifiedRegisterReceiverFlag")
             requireActivity().registerReceiver(sortReceiver, sortFilter)
-            @Suppress("UnspecifiedRegisterReceiverFlag")
             requireActivity().registerReceiver(refreshReceiver, refreshFilter)
         }
 
@@ -167,10 +163,11 @@ class GenresFragment : Fragment() {
         if (savedSortType != currentSortType) {
             currentSortType = savedSortType
             loadGenres()
-        } else if (!isFirstLoad) {
-            loadGenresPreserveState()
-        } else {
+        } else if (isFirstLoad) {
+            loadGenres()
             isFirstLoad = false
+        } else {
+            loadGenresPreserveState()
         }
     }
 
@@ -184,11 +181,11 @@ class GenresFragment : Fragment() {
     }
 
     fun refreshData() {
-        if (isVisible && !isRemoving) loadGenres()
+        if (isAdded) loadGenres()
     }
 
     fun refreshDataPreserveState() {
-        if (isVisible && !isRemoving) loadGenresPreserveState()
+        if (isAdded) loadGenresPreserveState()
     }
 
     private fun showLoading() {
@@ -202,54 +199,48 @@ class GenresFragment : Fragment() {
         recyclerView.visibility = View.VISIBLE
     }
 
-    private suspend fun fetchAndGroupSongs(): List<Genre> = withContext(Dispatchers.IO) {
-        if (!isAdded) return@withContext emptyList()
-        val songs = SongRepository.getAllSongs(requireContext())
-        val genreMap = mutableMapOf<String, Genre>()
-
-        songs.forEach { song ->
-            // REVERTED: Using song.year as the grouping key because song.genre is unreliable.
-            // This is the logic from the version you said was working.
-            val genreName = song.year?.toString() ?: "Unknown"
-
-            val genre = genreMap.getOrPut(genreName) {
-                Genre(name = genreName, songCount = 0, songs = mutableListOf())
-            }
-            genre.songs.add(song)
-        }
-
-        // Update song counts after grouping
-        genreMap.values.forEach { it.songCount = it.songs.size }
-        return@withContext genreMap.values.toList()
-    }
-
     private fun loadGenres() {
-        showLoading()
+        if (genreList.isEmpty()) {
+            showLoading()
+        }
         loadJob?.cancel()
         loadJob = CoroutineScope(Dispatchers.Main).launch {
             try {
-                val newGenres = fetchAndGroupSongs()
+                val songs = SongRepository.getAllSongs(requireContext())
+                val genreMap = songs.groupBy { it.genre ?: "Unknown Genre" }
+                    .mapValues { entry ->
+                        Genre(
+                            name = entry.key,
+                            songCount = entry.value.size,
+                            songs = entry.value.toMutableList()
+                        )
+                    }
                 genreList.clear()
-                genreList.addAll(newGenres)
+                genreList.addAll(genreMap.values)
                 applyCurrentSort()
             } catch (e: Exception) {
                 Log.e("GenresFragment", "Error loading genres", e)
-                if (isAdded) {
-                    hideLoading()
-                    emptyView.visibility = View.VISIBLE
-                }
+                hideLoading()
+                emptyView.visibility = View.VISIBLE
             }
         }
     }
 
     private fun loadGenresPreserveState() {
-        saveScrollState()
         loadJob?.cancel()
         loadJob = CoroutineScope(Dispatchers.Main).launch {
             try {
-                val newGenres = fetchAndGroupSongs()
+                val songs = SongRepository.getAllSongs(requireContext())
+                val genreMap = songs.groupBy { it.genre ?: "Unknown Genre" }
+                    .mapValues { entry ->
+                        Genre(
+                            name = entry.key,
+                            songCount = entry.value.size,
+                            songs = entry.value.toMutableList()
+                        )
+                    }
                 genreList.clear()
-                genreList.addAll(newGenres)
+                genreList.addAll(genreMap.values)
                 applyCurrentSortPreserveState()
             } catch (e: Exception) {
                 Log.e("GenresFragment", "Error in loadGenresPreserveState", e)
@@ -282,21 +273,21 @@ class GenresFragment : Fragment() {
 
     private fun updateAdapter() {
         if (!isAdded) return
-        recyclerView.adapter = GenreAdapter(
+        val adapter = GenreAdapter(
             genres = filteredGenreList,
             onGenreClick = { position -> openGenreSongs(position) }
         )
+        recyclerView.adapter = adapter
         hideLoading()
         emptyView.visibility = if (filteredGenreList.isEmpty()) View.VISIBLE else View.GONE
     }
 
     private fun openGenreSongs(position: Int) {
-        if (position < 0 || position >= filteredGenreList.size) return
         val genre = filteredGenreList[position]
         val fragment = GenreSongsFragment.newInstance(genre)
         requireActivity().supportFragmentManager.beginTransaction()
             .replace(R.id.fragment_container, fragment)
-            .addToBackStack(null)
+            .addToBackStack("genre_songs")
             .commit()
     }
 }

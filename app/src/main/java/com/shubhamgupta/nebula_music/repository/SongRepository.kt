@@ -94,6 +94,7 @@ object SongRepository {
             Log.e("SongRepository", "Error loading songs", e)
         }
 
-        return SongCacheManager.getAllSongs()
+        SongCacheManager.getAllSongs()
+        return songs
     }
 }
