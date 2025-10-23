@@ -54,7 +54,6 @@ class SongsFragment : Fragment() {
         }
     }
 
-    // Add this to SongsFragment.kt
     fun setScrollingEnabled(enabled: Boolean) {
         try {
             if (this::recyclerView.isInitialized) {
@@ -87,7 +86,7 @@ class SongsFragment : Fragment() {
 
     // Restore scroll state
     fun restoreScrollState() {
-        if (this::recyclerView.isInitialized && scrollPosition > 0) {
+        if (this::recyclerView.isInitialized) {
             val layoutManager = recyclerView.layoutManager as? LinearLayoutManager
             layoutManager?.let {
                 handler.postDelayed({
@@ -108,7 +107,6 @@ class SongsFragment : Fragment() {
                     currentSortType = newSortType
                     PreferenceManager.saveSortPreference(requireContext(), "songs", currentSortType)
                     Log.d("SongsFragment", "Sort changed and saved to: $currentSortType")
-                    // Force reload and sort
                     loadSongs()
                 }
             }
@@ -119,7 +117,8 @@ class SongsFragment : Fragment() {
         override fun onReceive(context: Context?, intent: Intent?) {
             when (intent?.action) {
                 "SONG_CHANGED", "PLAYBACK_STATE_CHANGED" -> {
-                    updateAdapter()
+                    // Using notifyDataSetChanged for simplicity, can be optimized
+                    recyclerView.adapter?.notifyDataSetChanged()
                 }
             }
         }
@@ -136,7 +135,6 @@ class SongsFragment : Fragment() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Load saved sort preference with proper default
         currentSortType = PreferenceManager.getSortPreferenceWithDefault(requireContext(), "songs")
         Log.d("SongsFragment", "onCreate - Loaded sort: $currentSortType")
     }
@@ -151,30 +149,28 @@ class SongsFragment : Fragment() {
         emptyView = view.findViewById(R.id.tv_empty_songs)
         loadingProgress = view.findViewById(R.id.loading_progress)
         recyclerView.layoutManager = LinearLayoutManager(context)
-
         return view
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        Log.d("SongsFragment", "onViewCreated - Current sort: $currentSortType")
+        Log.d("SongsFragment", "onViewCreated")
 
-        // Show loading immediately
-        showLoading()
-
-        // Auto-load immediately when view is created with proper sort
-        handler.postDelayed({
-            loadSongs()
-        }, 100)
+        // If the list already has data (e.g., returning from back stack), display it immediately.
+        // This prevents the screen from flashing a loading bar.
+        if (songList.isNotEmpty()) {
+            updateAdapter()
+            restoreScrollState()
+        } else {
+            // Otherwise, show the loading indicator. Data will be loaded in onResume.
+            showLoading()
+        }
     }
-
-    // In SongsFragment.kt, update the onResume method:
 
     override fun onResume() {
         super.onResume()
-        Log.d("SongsFragment", "onResume - Current sort: $currentSortType")
+        Log.d("SongsFragment", "onResume - isFirstLoad: $isFirstLoad")
 
-        // Fix for Android 14+ - add RECEIVER_NOT_EXPORTED flag
         val searchFilter = IntentFilter("SEARCH_QUERY_CHANGED")
         val sortFilter = IntentFilter("SORT_SONGS")
         val refreshFilter = IntentFilter("FORCE_REFRESH_SONGS")
@@ -184,32 +180,31 @@ class SongsFragment : Fragment() {
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            // Android 13+ requires explicit export flags
             requireActivity().registerReceiver(searchReceiver, searchFilter, Context.RECEIVER_NOT_EXPORTED)
             requireActivity().registerReceiver(sortReceiver, sortFilter, Context.RECEIVER_NOT_EXPORTED)
             requireActivity().registerReceiver(refreshReceiver, refreshFilter, Context.RECEIVER_NOT_EXPORTED)
             requireActivity().registerReceiver(playbackReceiver, playbackFilter, Context.RECEIVER_NOT_EXPORTED)
         } else {
-            // For older versions, use the old method
             requireActivity().registerReceiver(searchReceiver, searchFilter)
             requireActivity().registerReceiver(sortReceiver, sortFilter)
             requireActivity().registerReceiver(refreshReceiver, refreshFilter)
             requireActivity().registerReceiver(playbackReceiver, playbackFilter)
         }
 
-        // Rest of the method remains the same...
         val savedSortType = PreferenceManager.getSortPreferenceWithDefault(requireContext(), "songs")
-        Log.d("SongsFragment", "onResume - Saved sort: $savedSortType, Current sort: $currentSortType")
-
         if (savedSortType != currentSortType) {
             currentSortType = savedSortType
-            Log.d("SongsFragment", "Sort changed to: $currentSortType, reloading")
+            Log.d("SongsFragment", "Sort changed, reloading")
             loadSongs()
-        } else if (!isFirstLoad) {
+        } else if (isFirstLoad) {
+            // Load data only on the first time the fragment is created and resumed.
+            Log.d("SongsFragment", "First load, fetching songs")
+            loadSongs()
+            isFirstLoad = false
+        } else {
+            // For subsequent resumes (like returning from NowPlaying), refresh data while preserving state.
             Log.d("SongsFragment", "Refreshing data on resume")
             loadSongsPreserveState()
-        } else {
-            isFirstLoad = false
         }
     }
 
@@ -221,28 +216,18 @@ class SongsFragment : Fragment() {
         try {
             requireActivity().unregisterReceiver(playbackReceiver)
         } catch (e: Exception) {
-            // Ignore if receiver was not registered
+            // Ignore
         }
-
-        // Cancel any ongoing loading job
         loadJob?.cancel()
-
-        // Save scroll state when pausing
         saveScrollState()
     }
 
     fun refreshData() {
-        Log.d("SongsFragment", "refreshData - Manual refresh triggered")
-        if (isVisible && !isRemoving) {
-            loadSongs()
-        }
+        if (isAdded) loadSongs()
     }
 
     fun refreshDataPreserveState() {
-        Log.d("SongsFragment", "refreshDataPreserveState - Manual refresh with state preservation")
-        if (isVisible && !isRemoving) {
-            loadSongsPreserveState()
-        }
+        if (isAdded) loadSongsPreserveState()
     }
 
     private fun showLoading() {
@@ -257,22 +242,16 @@ class SongsFragment : Fragment() {
     }
 
     private fun loadSongs() {
-        Log.d("SongsFragment", "loadSongs - Starting to load songs with sort: $currentSortType")
-
-        // Cancel any previous loading job
+        Log.d("SongsFragment", "loadSongs called")
+        if (songList.isEmpty()) {
+            showLoading()
+        }
         loadJob?.cancel()
-
-        // Show loading indicator
-        showLoading()
-
         loadJob = CoroutineScope(Dispatchers.Main).launch {
             try {
-                songList.clear()
                 val allSongs = SongRepository.getAllSongs(requireContext())
+                songList.clear()
                 songList.addAll(allSongs)
-                Log.d("SongsFragment", "Loaded ${songList.size} songs, now applying sort: $currentSortType")
-
-                // Apply sort immediately after loading
                 applyCurrentSort()
             } catch (e: Exception) {
                 Log.e("SongsFragment", "Error loading songs", e)
@@ -283,75 +262,33 @@ class SongsFragment : Fragment() {
     }
 
     private fun loadSongsPreserveState() {
-        Log.d("SongsFragment", "loadSongsPreserveState - Loading songs with state preservation")
-
-        // Save current scroll state before refresh
-        saveScrollState()
-
-        // Cancel any previous loading job
+        Log.d("SongsFragment", "loadSongsPreserveState called")
         loadJob?.cancel()
-
         loadJob = CoroutineScope(Dispatchers.Main).launch {
             try {
-                songList.clear()
                 val allSongs = SongRepository.getAllSongs(requireContext())
+                songList.clear()
                 songList.addAll(allSongs)
-                Log.d("SongsFragment", "Loaded ${songList.size} songs, now applying sort: $currentSortType")
-
-                // Apply sort immediately after loading
                 applyCurrentSortPreserveState()
             } catch (e: Exception) {
-                Log.e("SongsFragment", "Error loading songs", e)
-                hideLoading()
-                emptyView.visibility = View.VISIBLE
+                Log.e("SongsFragment", "Error in loadSongsPreserveState", e)
             }
         }
     }
 
     private fun applyCurrentSort() {
-        Log.d("SongsFragment", "applyCurrentSort - Applying: $currentSortType to ${songList.size} songs")
-
         when (currentSortType) {
-            MainActivity.SortType.NAME_ASC -> {
-                songList.sortBy { it.title.lowercase() }
-                Log.d("SongsFragment", "Sorted by NAME_ASC")
-            }
-            MainActivity.SortType.NAME_DESC -> {
-                songList.sortByDescending { it.title.lowercase() }
-                Log.d("SongsFragment", "Sorted by NAME_DESC")
-            }
-            MainActivity.SortType.DATE_ADDED_ASC -> {
-                songList.sortBy { it.dateAdded }
-                Log.d("SongsFragment", "Sorted by DATE_ADDED_ASC")
-                // Debug: Show first few songs' dates
-                if (songList.isNotEmpty()) {
-                    Log.d("SongsFragment", "First song date: ${songList.first().dateAdded}")
-                    Log.d("SongsFragment", "Last song date: ${songList.last().dateAdded}")
-                }
-            }
-            MainActivity.SortType.DATE_ADDED_DESC -> {
-                songList.sortByDescending { it.dateAdded }
-                Log.d("SongsFragment", "Sorted by DATE_ADDED_DESC")
-                // Debug: Show first few songs' dates
-                if (songList.isNotEmpty()) {
-                    Log.d("SongsFragment", "First song date: ${songList.first().dateAdded}")
-                    Log.d("SongsFragment", "Last song date: ${songList.last().dateAdded}")
-                }
-            }
-            MainActivity.SortType.DURATION -> {
-                songList.sortByDescending { it.duration }
-                Log.d("SongsFragment", "Sorted by DURATION")
-            }
+            MainActivity.SortType.NAME_ASC -> songList.sortBy { it.title.lowercase() }
+            MainActivity.SortType.NAME_DESC -> songList.sortByDescending { it.title.lowercase() }
+            MainActivity.SortType.DATE_ADDED_ASC -> songList.sortBy { it.dateAdded }
+            MainActivity.SortType.DATE_ADDED_DESC -> songList.sortByDescending { it.dateAdded }
+            MainActivity.SortType.DURATION -> songList.sortByDescending { it.duration }
         }
-
         filterSongs()
     }
 
     private fun applyCurrentSortPreserveState() {
-        Log.d("SongsFragment", "applyCurrentSortPreserveState - Applying sort with state preservation")
         applyCurrentSort()
-
-        // Restore scroll state after data is loaded and sorted
         handler.postDelayed({
             restoreScrollState()
         }, 200)
@@ -367,11 +304,11 @@ class SongsFragment : Fragment() {
                         song.album?.contains(currentQuery, true) == true
             }.toMutableList()
         }
-
         updateAdapter()
     }
 
     private fun updateAdapter() {
+        if (!isAdded) return
         val adapter = SongAdapter(
             songs = filteredSongList,
             onItemClick = { pos -> openNowPlaying(pos) },
@@ -379,18 +316,8 @@ class SongsFragment : Fragment() {
             isSongFavorite = { songId -> PreferenceManager.isFavorite(requireContext(), songId) }
         )
         recyclerView.adapter = adapter
-
-        // Hide loading and show appropriate view
         hideLoading()
         emptyView.visibility = if (filteredSongList.isEmpty()) View.VISIBLE else View.GONE
-
-        Log.d("SongsFragment", "Adapter updated with ${filteredSongList.size} songs, sort: $currentSortType")
-
-        // Debug: Show first few song titles to verify sort
-        if (filteredSongList.isNotEmpty()) {
-            val firstFew = filteredSongList.take(3).map { it.title }
-            Log.d("SongsFragment", "First 3 songs: $firstFew")
-        }
     }
 
     private fun handleMenuAction(position: Int, menuItem: String) {
@@ -407,16 +334,13 @@ class SongsFragment : Fragment() {
         } else {
             PreferenceManager.addFavorite(requireContext(), song.id)
         }
-        updateAdapter()
+        // This is a lightweight way to refresh just the one item's view
+        recyclerView.adapter?.notifyItemChanged(filteredSongList.indexOf(song))
     }
 
     private fun openNowPlaying(position: Int) {
-        val songToPlay = filteredSongList[position]
-        PreferenceManager.addRecentSong(requireContext(), songToPlay.id)
-
         val service = (requireActivity() as MainActivity).getMusicService()
         service?.startPlayback(ArrayList(filteredSongList), position)
-
         (requireActivity() as MainActivity).navigateToNowPlaying()
     }
 }

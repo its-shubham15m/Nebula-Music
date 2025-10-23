@@ -71,7 +71,6 @@ class ArtistsFragment : Fragment() {
         }
     }
 
-    // Save scroll state
     fun saveScrollState() {
         if (this::recyclerView.isInitialized) {
             val layoutManager = recyclerView.layoutManager as? LinearLayoutManager
@@ -84,9 +83,8 @@ class ArtistsFragment : Fragment() {
         }
     }
 
-    // Restore scroll state
     fun restoreScrollState() {
-        if (this::recyclerView.isInitialized && scrollPosition > 0) {
+        if (this::recyclerView.isInitialized) {
             val layoutManager = recyclerView.layoutManager as? LinearLayoutManager
             layoutManager?.let {
                 handler.postDelayed({
@@ -102,12 +100,9 @@ class ArtistsFragment : Fragment() {
             if (intent?.action == "SORT_ARTISTS") {
                 val sortTypeOrdinal = intent.getIntExtra("sort_type", 0)
                 val newSortType = MainActivity.SortType.entries.toTypedArray()[sortTypeOrdinal]
-                Log.d("ArtistsFragment", "Sort broadcast received: $newSortType")
                 if (newSortType != currentSortType) {
                     currentSortType = newSortType
                     PreferenceManager.saveSortPreference(requireContext(), "artists", currentSortType)
-                    Log.d("ArtistsFragment", "Sort changed and saved to: $currentSortType")
-                    // Force reload and sort
                     loadArtists()
                 }
             }
@@ -117,7 +112,6 @@ class ArtistsFragment : Fragment() {
     private val refreshReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == "FORCE_REFRESH_ARTISTS") {
-                Log.d("ArtistsFragment", "Force refresh received via broadcast")
                 loadArtists()
             }
         }
@@ -125,73 +119,55 @@ class ArtistsFragment : Fragment() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Load saved sort preference with proper default
         currentSortType = PreferenceManager.getSortPreferenceWithDefault(requireContext(), "artists")
-        Log.d("ArtistsFragment", "onCreate - Loaded sort: $currentSortType")
     }
 
     override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
+        inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
     ): View? {
         val view = inflater.inflate(R.layout.fragment_category_list, container, false)
         recyclerView = view.findViewById(R.id.category_recycler_view)
         emptyView = view.findViewById(R.id.tv_empty_category)
         loadingProgress = view.findViewById(R.id.loading_progress)
         recyclerView.layoutManager = LinearLayoutManager(context)
-
         return view
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        Log.d("ArtistsFragment", "onViewCreated - Current sort: $currentSortType")
-
-        // Show loading immediately
-        showLoading()
-
-        // Auto-load immediately when view is created with proper sort
-        handler.postDelayed({
-            loadArtists()
-        }, 100)
+        if (artistList.isNotEmpty()) {
+            updateAdapter()
+            restoreScrollState()
+        } else {
+            showLoading()
+        }
     }
 
     override fun onResume() {
         super.onResume()
-        Log.d("ArtistsFragment", "onResume - Current sort: $currentSortType")
-
-        // Fix for Android 14+ - add RECEIVER_NOT_EXPORTED flag
         val searchFilter = IntentFilter("SEARCH_QUERY_CHANGED")
         val sortFilter = IntentFilter("SORT_ARTISTS")
         val refreshFilter = IntentFilter("FORCE_REFRESH_ARTISTS")
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            // Android 13+ requires explicit export flags
             requireActivity().registerReceiver(searchReceiver, searchFilter, Context.RECEIVER_NOT_EXPORTED)
             requireActivity().registerReceiver(sortReceiver, sortFilter, Context.RECEIVER_NOT_EXPORTED)
             requireActivity().registerReceiver(refreshReceiver, refreshFilter, Context.RECEIVER_NOT_EXPORTED)
         } else {
-            // For older versions, use the old method
             requireActivity().registerReceiver(searchReceiver, searchFilter)
             requireActivity().registerReceiver(sortReceiver, sortFilter)
             requireActivity().registerReceiver(refreshReceiver, refreshFilter)
         }
 
-        // Check if sort preference changed and reload if needed
         val savedSortType = PreferenceManager.getSortPreferenceWithDefault(requireContext(), "artists")
-        Log.d("ArtistsFragment", "onResume - Saved sort: $savedSortType, Current sort: $currentSortType")
-
         if (savedSortType != currentSortType) {
             currentSortType = savedSortType
-            Log.d("ArtistsFragment", "Sort changed to: $currentSortType, reloading")
             loadArtists()
-        } else if (!isFirstLoad) {
-            // Refresh data even if sort didn't change
-            Log.d("ArtistsFragment", "Refreshing data on resume")
-            loadArtistsPreserveState()
-        } else {
+        } else if (isFirstLoad) {
+            loadArtists()
             isFirstLoad = false
+        } else {
+            loadArtistsPreserveState()
         }
     }
 
@@ -200,26 +176,16 @@ class ArtistsFragment : Fragment() {
         requireActivity().unregisterReceiver(searchReceiver)
         requireActivity().unregisterReceiver(sortReceiver)
         requireActivity().unregisterReceiver(refreshReceiver)
-
-        // Cancel any ongoing loading job
         loadJob?.cancel()
-
-        // Save scroll state when pausing
         saveScrollState()
     }
 
     fun refreshData() {
-        Log.d("ArtistsFragment", "refreshData - Manual refresh triggered")
-        if (isVisible && !isRemoving) {
-            loadArtists()
-        }
+        if (isAdded) loadArtists()
     }
 
     fun refreshDataPreserveState() {
-        Log.d("ArtistsFragment", "refreshDataPreserveState - Manual refresh with state preservation")
-        if (isVisible && !isRemoving) {
-            loadArtistsPreserveState()
-        }
+        if (isAdded) loadArtistsPreserveState()
     }
 
     private fun showLoading() {
@@ -234,39 +200,23 @@ class ArtistsFragment : Fragment() {
     }
 
     private fun loadArtists() {
-        Log.d("ArtistsFragment", "loadArtists - Starting to load artists with sort: $currentSortType")
-
-        // Cancel any previous loading job
+        if (artistList.isEmpty()) {
+            showLoading()
+        }
         loadJob?.cancel()
-
-        // Show loading indicator
-        showLoading()
-
         loadJob = CoroutineScope(Dispatchers.Main).launch {
             try {
-                artistList.clear()
                 val songs = SongRepository.getAllSongs(requireContext())
-                val artistMap = mutableMapOf<String, Artist>()
-
-                songs.forEach { song ->
-                    val artistName = song.artist ?: "Unknown Artist"
-                    if (!artistMap.containsKey(artistName)) {
-                        artistMap[artistName] = Artist(
-                            name = artistName,
-                            songCount = 0,
-                            songs = mutableListOf()
+                val artistMap = songs.groupBy { it.artist ?: "Unknown Artist" }
+                    .mapValues { entry ->
+                        Artist(
+                            name = entry.key,
+                            songCount = entry.value.size,
+                            songs = entry.value.toMutableList()
                         )
                     }
-                    artistMap[artistName]?.let { artist ->
-                        artist.songCount++
-                        artist.songs.add(song)
-                    }
-                }
-
+                artistList.clear()
                 artistList.addAll(artistMap.values)
-                Log.d("ArtistsFragment", "Loaded ${artistList.size} artists, now applying sort: $currentSortType")
-
-                // Apply sort immediately after loading
                 applyCurrentSort()
             } catch (e: Exception) {
                 Log.e("ArtistsFragment", "Error loading artists", e)
@@ -277,108 +227,59 @@ class ArtistsFragment : Fragment() {
     }
 
     private fun loadArtistsPreserveState() {
-        Log.d("ArtistsFragment", "loadArtistsPreserveState - Loading artists with state preservation")
-
-        // Save current scroll state before refresh
-        saveScrollState()
-
-        // Cancel any previous loading job
         loadJob?.cancel()
-
         loadJob = CoroutineScope(Dispatchers.Main).launch {
             try {
-                artistList.clear()
                 val songs = SongRepository.getAllSongs(requireContext())
-                val artistMap = mutableMapOf<String, Artist>()
-
-                songs.forEach { song ->
-                    val artistName = song.artist ?: "Unknown Artist"
-                    if (!artistMap.containsKey(artistName)) {
-                        artistMap[artistName] = Artist(
-                            name = artistName,
-                            songCount = 0,
-                            songs = mutableListOf()
+                val artistMap = songs.groupBy { it.artist ?: "Unknown Artist" }
+                    .mapValues { entry ->
+                        Artist(
+                            name = entry.key,
+                            songCount = entry.value.size,
+                            songs = entry.value.toMutableList()
                         )
                     }
-                    artistMap[artistName]?.let { artist ->
-                        artist.songCount++
-                        artist.songs.add(song)
-                    }
-                }
-
+                artistList.clear()
                 artistList.addAll(artistMap.values)
-                Log.d("ArtistsFragment", "Loaded ${artistList.size} artists, now applying sort: $currentSortType")
-
-                // Apply sort immediately after loading
                 applyCurrentSortPreserveState()
             } catch (e: Exception) {
-                Log.e("ArtistsFragment", "Error loading artists", e)
-                hideLoading()
-                emptyView.visibility = View.VISIBLE
+                Log.e("ArtistsFragment", "Error in loadArtistsPreserveState", e)
             }
         }
     }
 
     private fun applyCurrentSort() {
-        Log.d("ArtistsFragment", "applyCurrentSort - Applying: $currentSortType to ${artistList.size} artists")
-
         when (currentSortType) {
-            MainActivity.SortType.NAME_ASC -> {
-                artistList.sortBy { it.name.lowercase() }
-                Log.d("ArtistsFragment", "Sorted by NAME_ASC")
-            }
-            MainActivity.SortType.NAME_DESC -> {
-                artistList.sortByDescending { it.name.lowercase() }
-                Log.d("ArtistsFragment", "Sorted by NAME_DESC")
-            }
-            else -> {
-                artistList.sortBy { it.name.lowercase() }
-                Log.d("ArtistsFragment", "Sorted by default NAME_ASC")
-            }
+            MainActivity.SortType.NAME_ASC -> artistList.sortBy { it.name.lowercase() }
+            MainActivity.SortType.NAME_DESC -> artistList.sortByDescending { it.name.lowercase() }
+            else -> artistList.sortBy { it.name.lowercase() }
         }
-
-        // Debug: Show first few artist names to verify sort
-        if (artistList.isNotEmpty()) {
-            val firstFew = artistList.take(3).map { it.name }
-            Log.d("ArtistsFragment", "First 3 artists: $firstFew")
-        }
-
         filterArtists()
     }
 
     private fun applyCurrentSortPreserveState() {
-        Log.d("ArtistsFragment", "applyCurrentSortPreserveState - Applying sort with state preservation")
         applyCurrentSort()
-
-        // Restore scroll state after data is loaded and sorted
-        handler.postDelayed({
-            restoreScrollState()
-        }, 200)
+        handler.postDelayed({ restoreScrollState() }, 200)
     }
 
     private fun filterArtists() {
         filteredArtistList = if (currentQuery.isBlank()) {
             artistList.toMutableList()
         } else {
-            artistList.filter { artist ->
-                artist.name.contains(currentQuery, true)
-            }.toMutableList()
+            artistList.filter { it.name.contains(currentQuery, true) }.toMutableList()
         }
-
         updateAdapter()
     }
 
     private fun updateAdapter() {
+        if (!isAdded) return
         val adapter = ArtistAdapter(
             artists = filteredArtistList,
             onArtistClick = { position -> openArtistSongs(position) }
         )
         recyclerView.adapter = adapter
-
-        // Hide loading and show appropriate view
         hideLoading()
         emptyView.visibility = if (filteredArtistList.isEmpty()) View.VISIBLE else View.GONE
-        Log.d("ArtistsFragment", "Adapter updated with ${filteredArtistList.size} artists, sort: $currentSortType")
     }
 
     private fun openArtistSongs(position: Int) {
