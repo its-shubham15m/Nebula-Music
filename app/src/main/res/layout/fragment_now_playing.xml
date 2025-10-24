@@ -6,10 +6,9 @@
     android:id="@+id/main_content_container"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fitsSystemWindows="true"
+    android:fitsSystemWindows="false"
     android:background="@android:color/transparent">
 
-    <!-- Background gradient that extends behind status bar -->
     <ImageView
         android:id="@+id/background_gradient"
         android:layout_width="match_parent"
@@ -21,7 +20,6 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintBottom_toBottomOf="parent" />
 
-    <!-- Overlay that extends behind status bar -->
     <View
         android:id="@+id/background_overlay"
         android:layout_width="match_parent"
@@ -32,7 +30,6 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintBottom_toBottomOf="parent" />
 
-    <!-- Top controls with consistent spacing -->
     <LinearLayout
         android:id="@+id/top_controls"
         android:layout_width="match_parent"

@@ -5,11 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
-import android.graphics.drawable.GradientDrawable
-import android.graphics.Color
-import android.media.MediaMetadataRetriever
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -19,7 +15,6 @@ import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.view.WindowInsetsController
 import android.widget.HorizontalScrollView
 import android.widget.ImageButton
 import android.widget.ImageView
@@ -30,7 +25,6 @@ import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.ColorUtils
 import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsControllerCompat
 import androidx.fragment.app.Fragment
 import androidx.palette.graphics.Palette
 import com.bumptech.glide.Glide
@@ -48,8 +42,10 @@ import com.shubhamgupta.nebula_music.utils.SongUtils
 import com.shubhamgupta.nebula_music.utils.Utils
 import com.shubhamgupta.nebula_music.utils.PreferenceManager
 import androidx.core.graphics.createBitmap
-import androidx.core.view.ViewCompat // IMPORTED
-import androidx.core.view.WindowInsetsCompat // IMPORTED
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import android.graphics.drawable.GradientDrawable
+import android.media.MediaMetadataRetriever
 
 
 class NowPlayingFragment : Fragment() {
@@ -59,9 +55,7 @@ class NowPlayingFragment : Fragment() {
     private var isSeeking = false
     private lateinit var bottomSheetDialog: BottomSheetDialog
     private var isFragmentVisible = false
-    private var isSystemUiChanged = false
 
-    // FIXED: Flag to prevent status bar flicker when sharing
     private var isSharing = false
 
     private lateinit var seekBar: SeekBar
@@ -86,14 +80,6 @@ class NowPlayingFragment : Fragment() {
     private lateinit var artistScrollView: HorizontalScrollView
     private lateinit var detailsScrollView: HorizontalScrollView
 
-    private var originalStatusBarColor: Int = 0
-    private var originalLightStatusBar: Boolean = false
-    private var originalNavigationBarColor: Int = 0
-
-    // NEW FIX: Property to store the original window background drawable
-    private var originalWindowBackground: android.graphics.drawable.Drawable? = null
-
-    // Queue manager instance
     private lateinit var queueManager: NowPlayingQueueManager
 
     private val updateSeekBar = object : Runnable {
@@ -121,13 +107,11 @@ class NowPlayingFragment : Fragment() {
         override fun onReceive(context: Context?, intent: Intent?) {
             when (intent?.action) {
                 "SONG_CHANGED" -> {
-                    // Update currentSong in MusicService to reflect the favorite status from storage
                     musicService?.getCurrentSong()?.let { song ->
                         song.isFavorite = PreferenceManager.isFavorite(requireContext(), song.id)
                     }
                     updateSongInfo()
                     updatePlaybackControls()
-                    // Refresh queue dialog if it's open
                     queueManager.refreshQueueDialog()
                 }
                 "PLAYBACK_STATE_CHANGED" -> {
@@ -144,7 +128,6 @@ class NowPlayingFragment : Fragment() {
                     }
                 }
                 "QUEUE_CHANGED" -> {
-                    // Refresh queue dialog when queue changes
                     queueManager.refreshQueueDialog()
                 }
             }
@@ -154,19 +137,14 @@ class NowPlayingFragment : Fragment() {
     companion object {
         fun newInstance(): NowPlayingFragment = NowPlayingFragment()
         private const val SCROLL_SPEED_PIXELS_PER_SECOND = 40
-        // Define original design offsets (Used for insets calculation)
-        private const val TOP_CONTROLS_OFFSET_DP = 0
         private const val BOTTOM_CONTROLS_OFFSET_DP = 90
     }
-
-    // In onCreate method:
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         musicService = (requireActivity() as MainActivity).getMusicService()
         queueManager = NowPlayingQueueManager(this)
 
-        // Register broadcast receiver with proper flags
         val filter = IntentFilter().apply {
             addAction("SONG_CHANGED")
             addAction("PLAYBACK_STATE_CHANGED")
@@ -175,21 +153,12 @@ class NowPlayingFragment : Fragment() {
             addAction("QUEUE_CHANGED")
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            ContextCompat.registerReceiver(
-                requireActivity(),
-                songChangeReceiver,
-                filter,
-                ContextCompat.RECEIVER_NOT_EXPORTED
-            )
-        } else {
-            ContextCompat.registerReceiver(
-                requireActivity(),
-                songChangeReceiver,
-                filter,
-                ContextCompat.RECEIVER_NOT_EXPORTED
-            )
-        }
+        ContextCompat.registerReceiver(
+            requireActivity(),
+            songChangeReceiver,
+            filter,
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
     }
 
     override fun onCreateView(
@@ -230,46 +199,31 @@ class NowPlayingFragment : Fragment() {
         detailsScrollView = view.findViewById(R.id.details_scroll_view)
 
         setupSeekBar()
-
-        // FIX: Ensure the content correctly handles the system bar height
         applySystemWindowInsets(view)
     }
 
-    /**
-     * FIX: Dynamically adds system window insets (Status Bar/Navigation Bar heights)
-     * to the top/bottom controls for correct positioning in an edge-to-edge layout.
-     */
     private fun applySystemWindowInsets(view: View) {
         val topControls = view.findViewById<LinearLayout>(R.id.top_controls)
         val mainPlayControls = view.findViewById<LinearLayout>(R.id.main_play_controls)
-        val rootLayout = view as ViewGroup // The root ConstraintLayout
+        val rootLayout = view as ViewGroup
 
-        // Apply a listener to the root view to receive insets
         ViewCompat.setOnApplyWindowInsetsListener(rootLayout) { v, insets ->
-            // Get insets for the system bars (Status Bar and Navigation Bar)
             val systemBarsInsets = insets.getInsets(WindowInsetsCompat.Type.systemBars())
 
-            // 1. Top Inset (Status Bar) - Use ONLY status bar height, don't add extra padding
             val totalTopPadding = systemBarsInsets.top
-
-            // Apply padding to top controls to account for status bar
             topControls.setPadding(
-                topControls.paddingLeft, // Preserve existing left padding from XML (e.g., 15dp)
+                topControls.paddingLeft,
                 totalTopPadding,
-                topControls.paddingRight, // Preserve existing right padding from XML (e.g., 15dp)
-                topControls.paddingBottom // Preserve existing bottom padding (likely 0)
+                topControls.paddingRight,
+                topControls.paddingBottom
             )
 
-            // 2. Bottom Inset (Navigation Bar)
-            // Adjust the bottom margin of main_play_controls to account for Nav Bar height + 90dp design offset
             val mainPlayControlsLayoutParams = mainPlayControls.layoutParams as ViewGroup.MarginLayoutParams
             val totalBottomMargin = systemBarsInsets.bottom + dpToPx(BOTTOM_CONTROLS_OFFSET_DP)
 
-            // Apply the new bottom margin
             mainPlayControlsLayoutParams.bottomMargin = totalBottomMargin
             mainPlayControls.layoutParams = mainPlayControlsLayoutParams
 
-            // Return consumed insets to stop them from propagating further down the view hierarchy
             insets
         }
     }
@@ -282,16 +236,13 @@ class NowPlayingFragment : Fragment() {
         bottomSheetDialog = BottomSheetDialog(requireContext())
         bottomSheetDialog.setContentView(bottomSheetView)
 
-        // Set the bottom sheet to expand fully
         bottomSheetDialog.behavior.peekHeight = resources.displayMetrics.heightPixels
         bottomSheetDialog.behavior.state = BottomSheetBehavior.STATE_EXPANDED
 
-        // Setup close button
         bottomSheetView.findViewById<ImageButton>(R.id.btn_close_sheet).setOnClickListener {
             bottomSheetDialog.dismiss()
         }
 
-        // Setup action buttons
         bottomSheetView.findViewById<View>(R.id.btn_share_song).setOnClickListener {
             shareCurrentSong()
             bottomSheetDialog.dismiss()
@@ -323,9 +274,8 @@ class NowPlayingFragment : Fragment() {
     }
 
     private fun setupClickListeners() {
-        // UPDATED: Back button now uses back navigation
         btnBack.setOnClickListener {
-            requireActivity().onBackPressed()
+            requireActivity().onBackPressedDispatcher.onBackPressed()
         }
         btnPlay.setOnClickListener { togglePlayPause() }
         btnPrev.setOnClickListener { musicService?.playPrevious() }
@@ -337,38 +287,21 @@ class NowPlayingFragment : Fragment() {
         ivFavorite.setOnClickListener { toggleFavorite() }
     }
 
-    /**
-     * UPDATED: Toggle repeat with only three states: ALL, ONE, SHUFFLE
-     */
     private fun toggleRepeat() {
-        musicService?.let { service ->
-            service.toggleRepeatMode()
-            updateRepeatButton()
-        }
+        musicService?.toggleRepeatMode()
     }
 
-    /**
-     * UPDATED: Update repeat button with correct three-state logic
-     */
     private fun updateRepeatButton() {
         val repeatMode = musicService?.getRepeatMode() ?: MusicService.RepeatMode.ALL
 
-        // Determine the correct icon based on the current mode
         val iconRes = when (repeatMode) {
             MusicService.RepeatMode.ONE -> R.drawable.repeat_one
             MusicService.RepeatMode.SHUFFLE -> R.drawable.shuffle
-            else -> R.drawable.repeat // ALL or default
+            else -> R.drawable.repeat
         }
-
         btnRepeat.setImageResource(iconRes)
 
-        // Set appropriate color based on mode
-        val color = when (repeatMode) {
-            MusicService.RepeatMode.ALL -> ContextCompat.getColor(requireContext(), R.color.white)
-            MusicService.RepeatMode.ONE -> ContextCompat.getColor(requireContext(), R.color.white)
-            MusicService.RepeatMode.SHUFFLE -> ContextCompat.getColor(requireContext(), R.color.white)
-            else -> ContextCompat.getColor(requireContext(), android.R.color.white)
-        }
+        val color = ContextCompat.getColor(requireContext(), R.color.white)
         btnRepeat.setColorFilter(color)
     }
 
@@ -379,7 +312,6 @@ class NowPlayingFragment : Fragment() {
         sheetView.findViewById<TextView>(R.id.sheet_song_artist).text = currentSong.artist ?: "Unknown Artist"
         sheetView.findViewById<TextView>(R.id.sheet_song_album).text = currentSong.album ?: "Unknown Album"
 
-        // Album Art Loading for Bottom Sheet
         val artLoader = if (currentSong.embeddedArtBytes != null) {
             Glide.with(this).load(currentSong.embeddedArtBytes)
         } else {
@@ -472,15 +404,11 @@ class NowPlayingFragment : Fragment() {
 
     private fun togglePlayPause() {
         musicService?.togglePlayPause()
-        updatePlayButton()
     }
 
     private fun shareCurrentSong() {
         val currentSong = musicService?.getCurrentSong() ?: return
-
-        // FIXED: Set the flag before launching the activity
         isSharing = true
-
         val shareIntent = Intent().apply {
             action = Intent.ACTION_SEND
             type = "text/plain"
@@ -490,23 +418,14 @@ class NowPlayingFragment : Fragment() {
         startActivity(Intent.createChooser(shareIntent, "Share Song"))
     }
 
-    /**
-     * Toggles favorite status and PERSISTS the change using PreferenceManager.
-     */
     private fun toggleFavorite() {
         val currentSong = musicService?.getCurrentSong() ?: return
-
-        // 1. Update the in-memory Song object state
         currentSong.isFavorite = !currentSong.isFavorite
-
-        // 2. PERSIST the change using PreferenceManager
         if (currentSong.isFavorite) {
             PreferenceManager.addFavorite(requireContext(), currentSong.id)
         } else {
             PreferenceManager.removeFavorite(requireContext(), currentSong.id)
         }
-
-        // 3. Update the UI
         ivFavorite.setImageResource(
             if (currentSong.isFavorite) R.drawable.ic_favorite_filled
             else R.drawable.ic_favorite_outline
@@ -525,10 +444,7 @@ class NowPlayingFragment : Fragment() {
 
     private fun updateSongInfo() {
         val currentSong = musicService?.getCurrentSong() ?: return
-
-        // Ensure the fragment UI reflects the actual persisted favorite status
         currentSong.isFavorite = PreferenceManager.isFavorite(requireContext(), currentSong.id)
-
         tvSongTitle.text = currentSong.title
         tvSongArtist.text = currentSong.artist ?: "Unknown Artist"
 
@@ -542,7 +458,6 @@ class NowPlayingFragment : Fragment() {
 
         resetScrollPositions()
 
-        // Prioritize loading embedded art bytes for album art
         val artLoader = if (currentSong.embeddedArtBytes != null) {
             Glide.with(this).load(currentSong.embeddedArtBytes)
         } else {
@@ -552,22 +467,8 @@ class NowPlayingFragment : Fragment() {
         artLoader.placeholder(R.drawable.default_album_art)
             .error(R.drawable.default_album_art)
             .listener(object : RequestListener<android.graphics.drawable.Drawable> {
-                override fun onLoadFailed(
-                    e: GlideException?,
-                    model: Any?,
-                    target: Target<android.graphics.drawable.Drawable>,
-                    isFirstResource: Boolean
-                ): Boolean {
-                    return false
-                }
-
-                override fun onResourceReady(
-                    resource: android.graphics.drawable.Drawable,
-                    model: Any,
-                    target: Target<android.graphics.drawable.Drawable>?,
-                    dataSource: DataSource,
-                    isFirstResource: Boolean
-                ): Boolean {
+                override fun onLoadFailed(e: GlideException?, model: Any?, target: Target<android.graphics.drawable.Drawable>, isFirstResource: Boolean): Boolean { return false }
+                override fun onResourceReady(resource: android.graphics.drawable.Drawable, model: Any, target: Target<android.graphics.drawable.Drawable>?, dataSource: DataSource, isFirstResource: Boolean): Boolean {
                     generateGradientBackground(resource)
                     return false
                 }
@@ -579,12 +480,10 @@ class NowPlayingFragment : Fragment() {
             seekBar.max = duration
             tvTotal.text = Utils.formatTime(duration.toLong())
 
-            // NEW: Check if we need to restore seek position from saved state
             val savedState = PreferenceManager.loadPlaybackState(requireContext())
             savedState?.let { state ->
                 if (state.lastPlayedSongId == currentSong.id && state.lastSeekPosition > 0) {
                     Log.d("NowPlayingFragment", "Restoring seek position: ${state.lastSeekPosition}")
-                    // Update seekbar and current time display
                     handler.post {
                         seekBar.progress = state.lastSeekPosition
                         tvCurrent.text = Utils.formatTime(state.lastSeekPosition.toLong())
@@ -593,12 +492,10 @@ class NowPlayingFragment : Fragment() {
             }
         }
 
-        // Use the synchronized favorite status
         ivFavorite.setImageResource(
             if (currentSong.isFavorite) R.drawable.ic_favorite_filled
             else R.drawable.ic_favorite_outline
         )
-
         startSmoothAutoScrolling()
     }
 
@@ -633,32 +530,10 @@ class NowPlayingFragment : Fragment() {
                         ColorUtils.setAlphaComponent(dominantColor, 50)
                     )
                 )
-
                 backgroundGradient.setImageDrawable(gradientDrawable)
-
-                // Adjust status bar icon color based on background
-                val isLight = ColorUtils.calculateLuminance(dominantColor) > 0.5
-
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    val window = requireActivity().window
-                    val view = window.decorView
-
-                    @Suppress("DEPRECATION")
-                    if (isLight) {
-                        // Set icons to dark for light background
-                        view.systemUiVisibility = view.systemUiVisibility or View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
-                    } else {
-                        // Set icons to light for dark background
-                        view.systemUiVisibility = view.systemUiVisibility and View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR.inv()
-                    }
-                }
             }
         } catch (e: Exception) {
-            val gradientDrawable = GradientDrawable(
-                GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(0x80000000.toInt(), 0x40000000, 0x00000000)
-            )
-            backgroundGradient.setImageDrawable(gradientDrawable)
+            // Fallback gradient
         }
     }
 
@@ -667,84 +542,17 @@ class NowPlayingFragment : Fragment() {
         btnPlay.setImageResource(if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play)
     }
 
-    // Handle system UI changes for immersive experience
     private fun setSystemBarAppearance(isNowPlaying: Boolean) {
         val window = requireActivity().window
+        val windowController = WindowCompat.getInsetsController(window, window.decorView)
 
         if (isNowPlaying) {
-            // Save current status bar state before changing
-            originalStatusBarColor = window.statusBarColor
-            originalNavigationBarColor = window.navigationBarColor
-
-            // Save current light status bar setting
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                @Suppress("DEPRECATION")
-                originalLightStatusBar = (window.decorView.systemUiVisibility and View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR) != 0
-            }
-
-            // Make system bars fully transparent
-            window.statusBarColor = Color.TRANSPARENT
-            window.navigationBarColor = Color.TRANSPARENT
-
-            // Set flags to allow drawing behind the system bars - FIXED for proper edge-to-edge
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                WindowCompat.setDecorFitsSystemWindows(window, false)
-                val controller = WindowInsetsControllerCompat(window, window.decorView)
-                controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_DEFAULT
-
-                // Ensure the window extends under the status bar
-                window.setDecorFitsSystemWindows(false)
-            } else {
-                @Suppress("DEPRECATION")
-                window.decorView.systemUiVisibility = (
-                        View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
-                                View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
-                                View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                        )
-            }
-
-            // Force dark status bar icons for better visibility on light backgrounds
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                @Suppress("DEPRECATION")
-                window.decorView.systemUiVisibility = window.decorView.systemUiVisibility and
-                        View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR.inv()
-            }
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                @Suppress("DEPRECATION")
-                window.decorView.systemUiVisibility = window.decorView.systemUiVisibility and
-                        View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR.inv()
-            }
-
-            isSystemUiChanged = true
-
+            // In NowPlayingFragment, we want light-colored icons for the status bar
+            // to be visible on the dark gradient background.
+            windowController.isAppearanceLightStatusBars = false
         } else {
-            // Only restore if we actually changed it
-            if (isSystemUiChanged) {
-                // Restore the previous system bar colors
-                window.statusBarColor = originalStatusBarColor
-                window.navigationBarColor = originalNavigationBarColor
-
-                // Restore system UI flags and light status bar setting
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    WindowCompat.setDecorFitsSystemWindows(window, true)
-                } else {
-                    @Suppress("DEPRECATION")
-                    val view = window.decorView
-                    // Clear the full-screen flags
-                    view.systemUiVisibility = View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-
-                    // Restore the original light status bar setting
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                        if (originalLightStatusBar) {
-                            view.systemUiVisibility = view.systemUiVisibility or View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
-                        } else {
-                            view.systemUiVisibility = view.systemUiVisibility and View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR.inv()
-                        }
-                    }
-                }
-                isSystemUiChanged = false
-            }
+            // When leaving the fragment, restore MainActivity's default UI appearance.
+            (activity as? MainActivity)?.updateSystemUiColors()
         }
     }
 
@@ -758,8 +566,6 @@ class NowPlayingFragment : Fragment() {
 
     private fun startSmoothAutoScrolling() {
         stopAutoScrolling()
-
-        // Start animator for song title
         titleScrollView.post {
             val maxScroll = tvSongTitle.width - titleScrollView.width
             if (maxScroll > 0) {
@@ -768,16 +574,12 @@ class NowPlayingFragment : Fragment() {
                     this.duration = duration
                     repeatMode = ValueAnimator.REVERSE
                     repeatCount = ValueAnimator.INFINITE
-                    addUpdateListener { animator ->
-                        titleScrollView.scrollTo(animator.animatedValue as Int, 0)
-                    }
+                    addUpdateListener { animator -> titleScrollView.scrollTo(animator.animatedValue as Int, 0) }
                     startDelay = 2000
                     start()
                 }
             }
         }
-
-        // Start animator for song artist
         artistScrollView.post {
             val maxScroll = tvSongArtist.width - artistScrollView.width
             if (maxScroll > 0) {
@@ -786,16 +588,12 @@ class NowPlayingFragment : Fragment() {
                     this.duration = duration
                     repeatMode = ValueAnimator.REVERSE
                     repeatCount = ValueAnimator.INFINITE
-                    addUpdateListener { animator ->
-                        artistScrollView.scrollTo(animator.animatedValue as Int, 0)
-                    }
+                    addUpdateListener { animator -> artistScrollView.scrollTo(animator.animatedValue as Int, 0) }
                     startDelay = 2000
                     start()
                 }
             }
         }
-
-        // Start animator for song details
         detailsScrollView.post {
             val maxScroll = tvSongDetails.width - detailsScrollView.width
             if (maxScroll > 0) {
@@ -804,9 +602,7 @@ class NowPlayingFragment : Fragment() {
                     this.duration = duration
                     repeatMode = ValueAnimator.REVERSE
                     repeatCount = ValueAnimator.INFINITE
-                    addUpdateListener { animator ->
-                        detailsScrollView.scrollTo(animator.animatedValue as Int, 0)
-                    }
+                    addUpdateListener { animator -> detailsScrollView.scrollTo(animator.animatedValue as Int, 0) }
                     startDelay = 2000
                     start()
                 }
@@ -823,18 +619,9 @@ class NowPlayingFragment : Fragment() {
     override fun onResume() {
         super.onResume()
         isFragmentVisible = true
-
-        // FIXED: Use a small delay to ensure smooth transition
-        handler.postDelayed({
-            if (isFragmentVisible) {
-                setSystemBarAppearance(true)
-            }
-        }, 50)
-
-        // FIXED: Reset the sharing flag when the fragment becomes active again
         isSharing = false
+        setSystemBarAppearance(true)
 
-        // Ensure current song's favorite state is loaded from storage before updating UI
         musicService?.getCurrentSong()?.let { song ->
             song.isFavorite = PreferenceManager.isFavorite(requireContext(), song.id)
         }
@@ -847,22 +634,16 @@ class NowPlayingFragment : Fragment() {
     override fun onPause() {
         super.onPause()
         isFragmentVisible = false
-
-        // FIXED: Only restore system UI if we're actually leaving the fragment
-        if (!requireActivity().isFinishing && !isSystemUiChanged) {
-            handler.postDelayed({
-                if (!isFragmentVisible) {
-                    setSystemBarAppearance(false)
-                }
-            }, 100)
+        if (!isSharing) {
+            setSystemBarAppearance(false)
         }
-
         stopSeekBarUpdates()
         stopAutoScrolling()
     }
 
     override fun onDestroyView() {
         super.onDestroyView()
+        setSystemBarAppearance(false)
         isFragmentVisible = false
         queueManager.stopScrollMonitoring()
         stopSeekBarUpdates()
@@ -871,11 +652,6 @@ class NowPlayingFragment : Fragment() {
             bottomSheetDialog.dismiss()
         }
         queueManager.dismissQueueDialog()
-
-        // Ensure system UI is restored when fragment is destroyed
-        if (isSystemUiChanged && !requireActivity().isFinishing) {
-            setSystemBarAppearance(false)
-        }
     }
 
     override fun onDestroy() {
@@ -886,15 +662,9 @@ class NowPlayingFragment : Fragment() {
         } catch (e: Exception) {
             // Ignore if receiver was not registered
         }
-        // Ensure status bar is restored if fragment is destroyed unexpectedly
-        if (!requireActivity().isFinishing) {
-            setSystemBarAppearance(false)
-        }
-        // Clear cache to free memory
         queueManager.clearCache()
     }
 
-    // FIXED: Safe dpToPx function
     private fun dpToPx(dp: Int): Int {
         return try {
             TypedValue.applyDimension(
@@ -903,12 +673,10 @@ class NowPlayingFragment : Fragment() {
                 resources.displayMetrics
             ).toInt()
         } catch (e: Exception) {
-            // Fallback calculation
             (dp * resources.displayMetrics.density).toInt()
         }
     }
 
-    // Getters for queue manager
     fun getMusicService(): MusicService? = musicService
     fun getCurrentQueuePosition(): Int = musicService?.getCurrentQueuePosition() ?: 0
 }

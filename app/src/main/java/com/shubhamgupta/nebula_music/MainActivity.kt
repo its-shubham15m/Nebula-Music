@@ -414,7 +414,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun updateSystemUiColors() {
+    fun updateSystemUiColors() {
         val window = window
         val decorView = window.decorView
 
