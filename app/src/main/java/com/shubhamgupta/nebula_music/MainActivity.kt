@@ -354,6 +354,7 @@ class MainActivity : AppCompatActivity() {
         initializeAppAfterPermissions()
     }
 
+    @SuppressLint("SetTextI18n")
     private fun initializeAppAfterPermissions() {
         Log.d("MainActivity", "Initializing app after permissions check")
 
@@ -361,6 +362,14 @@ class MainActivity : AppCompatActivity() {
         setupThemeFunctionality()
         setupBackPressHandler()
         setupDrawerListener()
+
+        try {
+            val sidebarVersionTextView = findViewById<TextView>(R.id.sidebar_app_version)
+            sidebarVersionTextView?.text = "Version: ${getAppVersionName()}"
+        } catch (e: Exception) {
+            Log.w("MainActivity", "Could not find R.id.sidebar_app_version. Skipping sidebar version set. Please add this TextView to your sidebar layout.")
+            // This catch block is to prevent crashes if the ID doesn't exist.
+        }
 
         // Use the stored savedInstanceState
         if (savedInstanceBundle == null) {
@@ -1012,6 +1021,22 @@ class MainActivity : AppCompatActivity() {
         handler.postDelayed({
             updateSystemUiColors()
         }, 100)
+    }
+
+    @SuppressLint("SetTextI18n")
+    fun getAppVersionName(): String {
+        return try {
+            val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                packageManager.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(0))
+            } else {
+                @Suppress("DEPRECATION")
+                packageManager.getPackageInfo(packageName, 0)
+            }
+            "v" + packageInfo.versionName
+        } catch (e: PackageManager.NameNotFoundException) {
+            Log.e("MainActivity", "Failed to get package info", e)
+            "v?" // Fallback
+        }
     }
 
     enum class SortType {

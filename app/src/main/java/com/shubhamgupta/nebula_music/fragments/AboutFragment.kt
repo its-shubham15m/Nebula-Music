@@ -1,5 +1,6 @@
 package com.shubhamgupta.nebula_music.fragments
 
+import android.annotation.SuppressLint
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -7,6 +8,7 @@ import android.view.ViewGroup
 import android.widget.ImageButton
 import android.widget.TextView
 import androidx.fragment.app.Fragment
+import com.shubhamgupta.nebula_music.MainActivity
 import com.shubhamgupta.nebula_music.R
 
 class AboutFragment : Fragment() {
@@ -34,6 +36,7 @@ class AboutFragment : Fragment() {
         (requireActivity() as com.shubhamgupta.nebula_music.MainActivity).setDrawerLocked(false)
     }
 
+    @SuppressLint("SetTextI18n")
     private fun initializeViews(view: View) {
         btnBack = view.findViewById(R.id.btn_back)
 
@@ -41,10 +44,10 @@ class AboutFragment : Fragment() {
             requireActivity().supportFragmentManager.popBackStack()
         }
 
-        // Set developer and contact information
+        val appVersion = (activity as? MainActivity)?.getAppVersionName() ?: "v?"
         view.findViewById<TextView>(R.id.tv_developer_name).text = "Shubham Gupta"
         view.findViewById<TextView>(R.id.tv_developer_email).text = "shubhamgupta15m@gmail.com"
-        view.findViewById<TextView>(R.id.tv_app_version).text = "Nebula Music v0.1.1"
+        view.findViewById<TextView>(R.id.tv_app_version).text = "Nebula Music $appVersion"
         view.findViewById<TextView>(R.id.tv_app_description).text = "A beautiful music player with modern UI and smooth experience."
     }
 }
