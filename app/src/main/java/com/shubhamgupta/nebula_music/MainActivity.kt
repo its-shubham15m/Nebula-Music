@@ -33,7 +33,9 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.view.GravityCompat
+import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.drawerlayout.widget.DrawerLayout
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.commit
@@ -359,6 +361,7 @@ class MainActivity : AppCompatActivity() {
         Log.d("MainActivity", "Initializing app after permissions check")
 
         initializeViews()
+        setupMiniPlayerInsets()
         setupThemeFunctionality()
         setupBackPressHandler()
         setupDrawerListener()
@@ -411,6 +414,24 @@ class MainActivity : AppCompatActivity() {
         } else {
             // For older versions, use the old method
             registerReceiver(queueUpdateReceiver, filter)
+        }
+    }
+
+    private fun setupMiniPlayerInsets() {
+        val miniPlayerContainer = findViewById<View>(R.id.mini_player_container)
+        // A base margin to have some space above the navigation bar. 16dp is a standard margin.
+        val baseMarginBottom = (16 * resources.displayMetrics.density).toInt()
+
+        ViewCompat.setOnApplyWindowInsetsListener(drawerLayout) { _, insets ->
+            val systemBarInsets = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+
+            // Apply the bottom inset and the base margin to the mini player container
+            val params = miniPlayerContainer.layoutParams as FrameLayout.LayoutParams
+            params.bottomMargin = baseMarginBottom + systemBarInsets.bottom
+            miniPlayerContainer.layoutParams = params
+
+            // Return the insets so that other views can also use them
+            insets
         }
     }
 
