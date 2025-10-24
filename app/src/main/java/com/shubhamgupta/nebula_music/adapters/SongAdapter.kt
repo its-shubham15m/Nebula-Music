@@ -3,7 +3,6 @@ package com.shubhamgupta.nebula_music.adapters
 import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.util.Log
 import android.util.SparseArray
 import android.view.LayoutInflater
@@ -15,15 +14,16 @@ import android.widget.SectionIndexer
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.widget.PopupMenu
-import androidx.core.content.FileProvider
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.shubhamgupta.nebula_music.R
 import com.shubhamgupta.nebula_music.models.Playlist
 import com.shubhamgupta.nebula_music.models.Song
 import com.shubhamgupta.nebula_music.utils.PreferenceManager
+import com.shubhamgupta.nebula_music.utils.SongUtils
 import java.io.File
 import java.util.UUID
+import androidx.core.graphics.toColorInt
 
 class SongAdapter(
     private val context: Context,
@@ -96,7 +96,7 @@ class SongAdapter(
         holder.title.text = song.title
         holder.artist.text = song.artist ?: "Unknown"
 
-        val albumUri = com.shubhamgupta.nebula_music.utils.SongUtils.getAlbumArtUri(song.albumId)
+        val albumUri = SongUtils.getAlbumArtUri(song.albumId)
         Glide.with(holder.itemView.context)
             .load(albumUri)
             .placeholder(R.drawable.default_album_art)
@@ -125,14 +125,15 @@ class SongAdapter(
 
         popup.menu.findItem(R.id.menu_title)?.title = song.title
 
-        // FIX: Dynamically set the favorite icon and title
         val favoriteItem = popup.menu.findItem(R.id.menu_toggle_favorite)
         if (isFavorite) {
             favoriteItem.title = "Remove from Favorites"
             favoriteItem.setIcon(R.drawable.ic_favorite_filled)
+            val primaryColor = "#DE3163".toColorInt()
+            favoriteItem.icon?.setTint(primaryColor)
         } else {
             favoriteItem.title = "Add to Favorites"
-            favoriteItem.setIcon(R.drawable.ic_favorite_outline) // Ensure you have this drawable
+            favoriteItem.setIcon(R.drawable.ic_favorite_outline)
         }
 
         popup.setOnMenuItemClickListener { item ->
@@ -151,7 +152,6 @@ class SongAdapter(
             true
         }
 
-        // FIX: Force icons to be shown in the popup menu
         try {
             val fieldMPopup = PopupMenu::class.java.getDeclaredField("mPopup")
             fieldMPopup.isAccessible = true

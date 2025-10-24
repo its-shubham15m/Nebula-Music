@@ -10,31 +10,37 @@
     <item
         android:id="@+id/menu_toggle_favorite"
         android:icon="@drawable/ic_favorite_outline"
-        android:title="Add to Favorites" />
+        android:title="Add to Favorites"
+        app:iconTint="?attr/colorOnSurface" />
 
     <item
         android:id="@+id/menu_play"
-        android:icon="@drawable/ic_playn"
-        android:title="Play" />
+        android:icon="@drawable/ic_play_song"
+        android:title="Play"
+        app:iconTint="?attr/colorOnSurface" />
 
     <item
         android:id="@+id/menu_add_to_queue"
         android:icon="@drawable/ic_queue"
-        android:title="Add to Queue" />
+        android:title="Add to Queue"
+        app:iconTint="?attr/colorOnSurface" />
 
     <item
         android:id="@+id/menu_add_to_playlist"
-        android:icon="@drawable/ic_add"
-        android:title="Add to Playlist" />
+        android:icon="@drawable/ic_add_playlist"
+        android:title="Add to Playlist"
+        app:iconTint="?attr/colorOnSurface" />
 
     <item
         android:id="@+id/menu_share"
-        android:icon="@drawable/ic_share"
-        android:title="Share" />
+        android:icon="@drawable/ic_share_file"
+        android:title="Share"
+        app:iconTint="?attr/colorOnSurface" />
 
     <item
         android:id="@+id/menu_delete"
         android:icon="@drawable/ic_delete"
-        android:title="Delete" />
+        android:title="Delete"
+        app:iconTint="?attr/colorOnSurface" />
 
 </menu>
