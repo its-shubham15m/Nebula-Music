@@ -1,28 +1,40 @@
 <?xml version="1.0" encoding="utf-8"?>
-<menu xmlns:android="http://schemas.android.com/apk/res/android">
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
     <item
         android:id="@+id/menu_title"
-        android:title="Song Title"
         android:enabled="false"
-        android:titleTextColor="?attr/colorPrimary"/>
+        android:title="Song Title" />
 
     <item
         android:id="@+id/menu_toggle_favorite"
-        android:title="Add to Favorites"/>
+        android:icon="@drawable/ic_favorite_outline"
+        android:title="Add to Favorites" />
 
     <item
         android:id="@+id/menu_play"
-        android:title="Play"/>
+        android:icon="@drawable/ic_playn"
+        android:title="Play" />
+
     <item
         android:id="@+id/menu_add_to_queue"
-        android:title="Add to Queue"/>
+        android:icon="@drawable/ic_queue"
+        android:title="Add to Queue" />
+
     <item
         android:id="@+id/menu_add_to_playlist"
-        android:title="Add to Playlist"/>
-    <item
-        android:id="@+id/menu_delete"
-        android:title="Delete"/>
+        android:icon="@drawable/ic_add"
+        android:title="Add to Playlist" />
+
     <item
         android:id="@+id/menu_share"
-        android:title="Share"/>
+        android:icon="@drawable/ic_share"
+        android:title="Share" />
+
+    <item
+        android:id="@+id/menu_delete"
+        android:icon="@drawable/ic_delete"
+        android:title="Delete" />
+
 </menu>

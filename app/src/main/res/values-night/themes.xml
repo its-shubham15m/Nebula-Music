@@ -24,7 +24,7 @@
         <item name="colorControlNormal">@color/colorOnSurface</item>
         <item name="colorControlActivated">@color/colorPrimary</item>
         <item name="colorControlHighlight">@color/colorPrimary</item>
-
+        <item name="popupMenuStyle">@style/App.PopupMenu</item>
         <item name="radioButtonStyle">@style/RadioButtonStyle</item>
 
         <item name="alertDialogTheme">@style/AlertDialogTheme</item>
@@ -50,5 +50,15 @@
 
     <style name="AlertDialogButton" parent="Widget.Material3.Button.TextButton">
         <item name="android:textColor">@color/colorPrimary</item>
+    </style>
+
+    <style name="ShapeAppearance.App.PopupMenu" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">12dp</item>
+    </style>
+
+    <style name="App.PopupMenu" parent="Widget.Material3.PopupMenu.Overflow">
+        <item name="shapeAppearance">@style/ShapeAppearance.App.PopupMenu</item>
+        <item name="android:background">@color/colorSurface</item>
     </style>
 </resources>

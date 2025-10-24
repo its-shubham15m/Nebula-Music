@@ -1,5 +1,7 @@
 package com.shubhamgupta.nebula_music.fragments
 
+import android.app.Activity
+import android.app.RecoverableSecurityException
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -8,12 +10,17 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.MediaStore
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.Toast
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -40,11 +47,13 @@ class SongsFragment : Fragment() {
     private var isFirstLoad = true
     private val handler = Handler(Looper.getMainLooper())
     private var loadJob: Job? = null
-
-    // Scroll state management
     private var scrollPosition = 0
     private var scrollOffset = 0
 
+    // NEW: ActivityResultLauncher to handle the deletion confirmation result
+    private lateinit var deleteResultLauncher: ActivityResultLauncher<IntentSenderRequest>
+
+    // ... (BroadcastReceivers are unchanged) ...
     private val searchReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == "SEARCH_QUERY_CHANGED") {
@@ -59,11 +68,10 @@ class SongsFragment : Fragment() {
             if (this::recyclerView.isInitialized) {
                 recyclerView.isNestedScrollingEnabled = enabled
                 recyclerView.isEnabled = enabled
-
                 if (!enabled) {
-                    recyclerView.setOnTouchListener { _, _ -> true } // Block touches
+                    recyclerView.setOnTouchListener { _, _ -> true }
                 } else {
-                    recyclerView.setOnTouchListener(null) // Allow touches
+                    recyclerView.setOnTouchListener(null)
                 }
             }
         } catch (e: Exception) {
@@ -71,7 +79,8 @@ class SongsFragment : Fragment() {
         }
     }
 
-    // Save scroll state
+    // ... (Scroll state methods are unchanged) ...
+
     fun saveScrollState() {
         if (this::recyclerView.isInitialized) {
             val layoutManager = recyclerView.layoutManager as? LinearLayoutManager
@@ -79,19 +88,16 @@ class SongsFragment : Fragment() {
                 scrollPosition = it.findFirstVisibleItemPosition()
                 val firstVisibleView = it.findViewByPosition(scrollPosition)
                 scrollOffset = firstVisibleView?.top ?: 0
-                Log.d("SongsFragment", "Saved scroll state: position=$scrollPosition, offset=$scrollOffset")
             }
         }
     }
 
-    // Restore scroll state
     fun restoreScrollState() {
         if (this::recyclerView.isInitialized) {
             val layoutManager = recyclerView.layoutManager as? LinearLayoutManager
             layoutManager?.let {
                 handler.postDelayed({
                     it.scrollToPositionWithOffset(scrollPosition, scrollOffset)
-                    Log.d("SongsFragment", "Restored scroll state: position=$scrollPosition, offset=$scrollOffset")
                 }, 100)
             }
         }
@@ -102,22 +108,18 @@ class SongsFragment : Fragment() {
             if (intent?.action == "SORT_SONGS") {
                 val sortTypeOrdinal = intent.getIntExtra("sort_type", 0)
                 val newSortType = MainActivity.SortType.entries.toTypedArray()[sortTypeOrdinal]
-                Log.d("SongsFragment", "Sort broadcast received: $newSortType")
                 if (newSortType != currentSortType) {
                     currentSortType = newSortType
                     PreferenceManager.saveSortPreference(requireContext(), "songs", currentSortType)
-                    Log.d("SongsFragment", "Sort changed and saved to: $currentSortType")
                     loadSongs()
                 }
             }
         }
     }
-
     private val playbackReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             when (intent?.action) {
                 "SONG_CHANGED", "PLAYBACK_STATE_CHANGED" -> {
-                    // Using notifyDataSetChanged for simplicity, can be optimized
                     recyclerView.adapter?.notifyDataSetChanged()
                 }
             }
@@ -127,7 +129,6 @@ class SongsFragment : Fragment() {
     private val refreshReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == "FORCE_REFRESH_SONGS") {
-                Log.d("SongsFragment", "Force refresh received via broadcast")
                 loadSongs()
             }
         }
@@ -136,7 +137,17 @@ class SongsFragment : Fragment() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         currentSortType = PreferenceManager.getSortPreferenceWithDefault(requireContext(), "songs")
-        Log.d("SongsFragment", "onCreate - Loaded sort: $currentSortType")
+
+        // NEW: Initialize the launcher
+        deleteResultLauncher = registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+            if (result.resultCode == Activity.RESULT_OK) {
+                Toast.makeText(requireContext(), "Song deleted successfully", Toast.LENGTH_SHORT).show()
+                // The file is deleted, now refresh the UI
+                refreshData()
+            } else {
+                Toast.makeText(requireContext(), "Song could not be deleted", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     override fun onCreateView(
@@ -152,25 +163,20 @@ class SongsFragment : Fragment() {
         return view
     }
 
+    // ... (onViewCreated, onResume, onPause are mostly unchanged) ...
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        Log.d("SongsFragment", "onViewCreated")
-
-        // If the list already has data (e.g., returning from back stack), display it immediately.
-        // This prevents the screen from flashing a loading bar.
         if (songList.isNotEmpty()) {
             updateAdapter()
             restoreScrollState()
         } else {
-            // Otherwise, show the loading indicator. Data will be loaded in onResume.
             showLoading()
         }
     }
 
     override fun onResume() {
         super.onResume()
-        Log.d("SongsFragment", "onResume - isFirstLoad: $isFirstLoad")
-
         val searchFilter = IntentFilter("SEARCH_QUERY_CHANGED")
         val sortFilter = IntentFilter("SORT_SONGS")
         val refreshFilter = IntentFilter("FORCE_REFRESH_SONGS")
@@ -194,16 +200,11 @@ class SongsFragment : Fragment() {
         val savedSortType = PreferenceManager.getSortPreferenceWithDefault(requireContext(), "songs")
         if (savedSortType != currentSortType) {
             currentSortType = savedSortType
-            Log.d("SongsFragment", "Sort changed, reloading")
             loadSongs()
         } else if (isFirstLoad) {
-            // Load data only on the first time the fragment is created and resumed.
-            Log.d("SongsFragment", "First load, fetching songs")
             loadSongs()
             isFirstLoad = false
         } else {
-            // For subsequent resumes (like returning from NowPlaying), refresh data while preserving state.
-            Log.d("SongsFragment", "Refreshing data on resume")
             loadSongsPreserveState()
         }
     }
@@ -222,6 +223,7 @@ class SongsFragment : Fragment() {
         saveScrollState()
     }
 
+    // ... (refreshData, showLoading, loadSongs, etc. are unchanged) ...
     fun refreshData() {
         if (isAdded) loadSongs()
     }
@@ -242,7 +244,6 @@ class SongsFragment : Fragment() {
     }
 
     private fun loadSongs() {
-        Log.d("SongsFragment", "loadSongs called")
         if (songList.isEmpty()) {
             showLoading()
         }
@@ -254,7 +255,6 @@ class SongsFragment : Fragment() {
                 songList.addAll(allSongs)
                 applyCurrentSort()
             } catch (e: Exception) {
-                Log.e("SongsFragment", "Error loading songs", e)
                 hideLoading()
                 emptyView.visibility = View.VISIBLE
             }
@@ -262,7 +262,6 @@ class SongsFragment : Fragment() {
     }
 
     private fun loadSongsPreserveState() {
-        Log.d("SongsFragment", "loadSongsPreserveState called")
         loadJob?.cancel()
         loadJob = CoroutineScope(Dispatchers.Main).launch {
             try {
@@ -271,7 +270,7 @@ class SongsFragment : Fragment() {
                 songList.addAll(allSongs)
                 applyCurrentSortPreserveState()
             } catch (e: Exception) {
-                Log.e("SongsFragment", "Error in loadSongsPreserveState", e)
+                // Ignore
             }
         }
     }
@@ -307,35 +306,48 @@ class SongsFragment : Fragment() {
         updateAdapter()
     }
 
+    // UPDATED: This now passes the onDeleteRequest lambda to the adapter
     private fun updateAdapter() {
         if (!isAdded) return
         val adapter = SongAdapter(
+            context = requireContext(),
             songs = filteredSongList,
             onItemClick = { pos -> openNowPlaying(pos) },
-            onMenuClick = { pos, menuItem -> handleMenuAction(pos, menuItem) },
-            isSongFavorite = { songId -> PreferenceManager.isFavorite(requireContext(), songId) }
+            onDataChanged = { refreshData() },
+            onDeleteRequest = { song -> requestDeleteSong(song) }
         )
         recyclerView.adapter = adapter
         hideLoading()
         emptyView.visibility = if (filteredSongList.isEmpty()) View.VISIBLE else View.GONE
     }
 
-    private fun handleMenuAction(position: Int, menuItem: String) {
-        val song = filteredSongList[position]
-        when (menuItem) {
-            "play" -> openNowPlaying(position)
-            "toggle_favorite" -> toggleFavorite(song)
-        }
-    }
+    // NEW: This method handles the logic for requesting file deletion
+    private fun requestDeleteSong(song: Song) {
+        try {
+            val intentSender = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                val uris = listOf(song.uri)
+                MediaStore.createDeleteRequest(requireContext().contentResolver, uris).intentSender
+            } else {
+                // For Android 10, try to catch RecoverableSecurityException
+                // This is a fallback and might not always work as intended
+                null
+            }
 
-    private fun toggleFavorite(song: Song) {
-        if (PreferenceManager.isFavorite(requireContext(), song.id)) {
-            PreferenceManager.removeFavorite(requireContext(), song.id)
-        } else {
-            PreferenceManager.addFavorite(requireContext(), song.id)
+            if (intentSender != null) {
+                val request = IntentSenderRequest.Builder(intentSender).build()
+                deleteResultLauncher.launch(request)
+            } else {
+                // Fallback for older versions or if createDeleteRequest fails
+                Toast.makeText(requireContext(), "Could not request deletion.", Toast.LENGTH_SHORT).show()
+            }
+        } catch (e: SecurityException) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && e is RecoverableSecurityException) {
+                val request = IntentSenderRequest.Builder(e.userAction.actionIntent.intentSender).build()
+                deleteResultLauncher.launch(request)
+            } else {
+                Toast.makeText(requireContext(), "Permission denied to delete this song.", Toast.LENGTH_SHORT).show()
+            }
         }
-        // This is a lightweight way to refresh just the one item's view
-        recyclerView.adapter?.notifyItemChanged(filteredSongList.indexOf(song))
     }
 
     private fun openNowPlaying(position: Int) {

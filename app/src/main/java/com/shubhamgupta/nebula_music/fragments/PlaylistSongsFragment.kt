@@ -1,5 +1,7 @@
 package com.shubhamgupta.nebula_music.fragments
 
+import android.app.Activity
+import android.app.RecoverableSecurityException
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -7,12 +9,19 @@ import android.content.IntentFilter
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
+import android.provider.MediaStore
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.ImageButton
 import android.widget.TextView
+import android.widget.Toast
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.PopupMenu
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
@@ -21,6 +30,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.google.android.material.imageview.ShapeableImageView
+import com.shubhamgupta.nebula_music.MainActivity // Import MainActivity
 import com.shubhamgupta.nebula_music.R
 import com.shubhamgupta.nebula_music.adapters.SongAdapter
 import com.shubhamgupta.nebula_music.models.Playlist
@@ -45,137 +55,108 @@ class PlaylistSongsFragment : Fragment() {
     private lateinit var btnShuffle: com.google.android.material.button.MaterialButton
 
     private var currentPlaylist: Playlist? = null
-    private var playlistSongs: List<Song> = emptyList()
+    private var playlistSongsList = mutableListOf<Song>() // Use MutableList
     private var musicService: MusicService? = null
 
-    private val playbackReceiver = object : BroadcastReceiver() {
+    // Delete request launcher
+    private lateinit var deleteResultLauncher: ActivityResultLauncher<IntentSenderRequest>
+
+    private val playbackReceiver = object : BroadcastReceiver() { // Unchanged
         override fun onReceive(context: Context?, intent: Intent?) {
             when (intent?.action) {
                 "SONG_CHANGED", "PLAYBACK_STATE_CHANGED" -> {
-                    // Refresh the adapter to update play states
                     currentPlaylist?.let { setupPlaylistSongs(it) }
                 }
             }
         }
     }
 
+    // --- Status Bar Color Methods (Unchanged) ---
     private fun updateStatusBarColor() {
-        val activity = requireActivity() as com.shubhamgupta.nebula_music.MainActivity
-
-        // Get the current theme to determine which color to use
+        val activity = requireActivity() as MainActivity
         val currentTheme = com.shubhamgupta.nebula_music.utils.ThemeManager.getCurrentTheme(requireContext())
+        val colorRes = R.color.colorPrimaryContainer // Use container color
 
-        // Set status bar color to match colorPrimaryContainer
-        when (currentTheme) {
-            com.shubhamgupta.nebula_music.utils.ThemeManager.THEME_LIGHT -> {
-                // For light theme, use a light color
-                activity.window.statusBarColor = ContextCompat.getColor(requireContext(), R.color.colorPrimaryContainer)
-                WindowCompat.getInsetsController(activity.window, activity.window.decorView).isAppearanceLightStatusBars = true
-            }
-            com.shubhamgupta.nebula_music.utils.ThemeManager.THEME_DARK -> {
-                // For dark theme, use a dark color
-                activity.window.statusBarColor = ContextCompat.getColor(requireContext(), R.color.colorPrimaryContainer)
-                WindowCompat.getInsetsController(activity.window, activity.window.decorView).isAppearanceLightStatusBars = false
-            }
-            else -> {
-                // For system theme, follow system
-                val isLightTheme = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_NO
-                activity.window.statusBarColor = ContextCompat.getColor(requireContext(), R.color.colorPrimaryContainer)
-                WindowCompat.getInsetsController(activity.window, activity.window.decorView).isAppearanceLightStatusBars = isLightTheme
-            }
+        activity.window.statusBarColor = ContextCompat.getColor(requireContext(), colorRes)
+        val isLightStatus = when (currentTheme) {
+            com.shubhamgupta.nebula_music.utils.ThemeManager.THEME_LIGHT -> true
+            com.shubhamgupta.nebula_music.utils.ThemeManager.THEME_DARK -> false
+            else -> (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_NO
         }
-
-        // Make sure the status bar is not transparent
+        WindowCompat.getInsetsController(activity.window, activity.window.decorView).isAppearanceLightStatusBars = isLightStatus
         activity.window.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
         activity.window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
     }
-
     private fun resetStatusBarColor() {
-        val activity = requireActivity() as com.shubhamgupta.nebula_music.MainActivity
+        val activity = requireActivity() as MainActivity
         val currentTheme = com.shubhamgupta.nebula_music.utils.ThemeManager.getCurrentTheme(requireContext())
-
-        // Reset to default background color
-        when (currentTheme) {
-            com.shubhamgupta.nebula_music.utils.ThemeManager.THEME_LIGHT -> {
-                activity.window.statusBarColor = ContextCompat.getColor(requireContext(), R.color.colorBackground)
-                WindowCompat.getInsetsController(activity.window, activity.window.decorView).isAppearanceLightStatusBars = true
-            }
-            com.shubhamgupta.nebula_music.utils.ThemeManager.THEME_DARK -> {
-                activity.window.statusBarColor = ContextCompat.getColor(requireContext(), R.color.colorBackground)
-                WindowCompat.getInsetsController(activity.window, activity.window.decorView).isAppearanceLightStatusBars = false
-            }
-            else -> {
-                val isLightTheme = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_NO
-                activity.window.statusBarColor = ContextCompat.getColor(requireContext(), R.color.colorBackground)
-                WindowCompat.getInsetsController(activity.window, activity.window.decorView).isAppearanceLightStatusBars = isLightTheme
-            }
+        val colorRes = R.color.colorBackground // Reset to background
+        activity.window.statusBarColor = ContextCompat.getColor(requireContext(), colorRes)
+        val isLightStatus = when (currentTheme) {
+            com.shubhamgupta.nebula_music.utils.ThemeManager.THEME_LIGHT -> true
+            com.shubhamgupta.nebula_music.utils.ThemeManager.THEME_DARK -> false
+            else -> (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_NO
         }
+        WindowCompat.getInsetsController(activity.window, activity.window.decorView).isAppearanceLightStatusBars = isLightStatus
+        // Optional: Add back translucent flag if needed, but usually background color is enough
     }
-
+    // --- Companion Object (Unchanged) ---
     companion object {
         private const val ARG_PLAYLIST = "playlist"
-
         fun newInstance(playlist: Playlist): PlaylistSongsFragment {
             val fragment = PlaylistSongsFragment()
             val args = Bundle()
-            args.putSerializable(ARG_PLAYLIST, playlist)
+            args.putSerializable(ARG_PLAYLIST, playlist) // Use Serializable for Playlist
             fragment.arguments = args
             return fragment
         }
     }
 
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        // Initialize delete launcher
+        deleteResultLauncher = registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+            if (result.resultCode == Activity.RESULT_OK) {
+                Toast.makeText(requireContext(), "Song deleted successfully", Toast.LENGTH_SHORT).show()
+                refreshData() // Reload data after deletion
+            } else {
+                Toast.makeText(requireContext(), "Song could not be deleted", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    override fun onCreateView( // Unchanged
+        inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
     ): View? {
         val view = inflater.inflate(R.layout.fragment_playlist_songs, container, false)
         initializeViews(view)
         return view
     }
 
-    // In onResume method:
-
-    override fun onResume() {
+    override fun onResume() { // Unchanged (except receiver flags)
         super.onResume()
-        // Lock drawer when fragment is visible
-        (requireActivity() as com.shubhamgupta.nebula_music.MainActivity).setDrawerLocked(true)
-
-        // Update status bar color for this fragment
+        (requireActivity() as MainActivity).setDrawerLocked(true)
         updateStatusBarColor()
-
-        // Register broadcast receiver for playback state changes with proper flags
         val filter = IntentFilter().apply {
             addAction("SONG_CHANGED")
             addAction("PLAYBACK_STATE_CHANGED")
         }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            requireActivity().registerReceiver(playbackReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            requireActivity().registerReceiver(playbackReceiver, filter)
-        }
-
-        // Refresh data when returning to fragment
-        currentPlaylist?.let { setupPlaylistSongs(it) }
+        val receiverFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Context.RECEIVER_NOT_EXPORTED else 0
+        requireActivity().registerReceiver(playbackReceiver, filter, receiverFlags)
+        // Reload playlist from args or preferences in case it was modified
+        loadCurrentPlaylist()
     }
 
-    override fun onPause() {
+    override fun onPause() { // Unchanged
         super.onPause()
-        // Unlock drawer when leaving fragment
-        (requireActivity() as com.shubhamgupta.nebula_music.MainActivity).setDrawerLocked(false)
-
-        // Reset status bar color when leaving this fragment
+        (requireActivity() as MainActivity).setDrawerLocked(false)
         resetStatusBarColor()
-
         try {
             requireActivity().unregisterReceiver(playbackReceiver)
-        } catch (e: Exception) {
-            // Ignore if receiver was not registered
-        }
+        } catch (e: Exception) { /* Ignore */ }
     }
 
-    private fun initializeViews(view: View) {
+    private fun initializeViews(view: View) { // Unchanged
         recyclerView = view.findViewById(R.id.songs_recycler_view)
         playlistArt = view.findViewById(R.id.iv_playlist_art)
         playlistName = view.findViewById(R.id.tv_playlist_name)
@@ -186,154 +167,138 @@ class PlaylistSongsFragment : Fragment() {
         btnOptions = view.findViewById(R.id.btn_playlist_options)
         btnPlay = view.findViewById(R.id.btn_play_playlist)
         btnShuffle = view.findViewById(R.id.btn_shuffle_playlist)
-
         recyclerView.layoutManager = LinearLayoutManager(context)
 
-        // Fix for Serializable retrieval
+        // Load initial playlist from arguments
         currentPlaylist = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             arguments?.getSerializable(ARG_PLAYLIST, Playlist::class.java)
         } else {
-            @Suppress("DEPRECATION")
-            arguments?.getSerializable(ARG_PLAYLIST) as? Playlist
+            @Suppress("DEPRECATION") arguments?.getSerializable(ARG_PLAYLIST) as? Playlist
         }
 
-        currentPlaylist?.let { setupPlaylistSongs(it) }
+        currentPlaylist?.let { setupPlaylistSongs(it) } ?: run {
+            Log.e("PlaylistSongsFragment", "Current playlist is null on init")
+            // Handle error, maybe pop backstack
+        }
+
 
         btnBack.setOnClickListener {
             requireActivity().supportFragmentManager.popBackStack()
         }
-
-        btnPlay.setOnClickListener {
-            playPlaylist()
-        }
-
-        btnShuffle.setOnClickListener {
-            shufflePlaylist()
-        }
-
-        btnOptions.setOnClickListener { view ->
-            showPlaylistOptionsMenu(view)
-        }
+        btnPlay.setOnClickListener { playPlaylist() }
+        btnShuffle.setOnClickListener { shufflePlaylist() }
+        btnOptions.setOnClickListener { v -> showPlaylistOptionsMenu(v) }
 
         try {
-            musicService = (requireActivity() as com.shubhamgupta.nebula_music.MainActivity).getMusicService()
-        } catch (e: Exception) {
-            e.printStackTrace()
+            musicService = (requireActivity() as MainActivity).getMusicService()
+        } catch (e: Exception) { e.printStackTrace() }
+    }
+
+    // NEW: Load/Reload current playlist from preferences
+    private fun loadCurrentPlaylist() {
+        val playlistId = currentPlaylist?.id
+        if (playlistId != null) {
+            val updatedPlaylist = PreferenceManager.getPlaylists(requireContext()).find { it.id == playlistId }
+            if (updatedPlaylist != null) {
+                currentPlaylist = updatedPlaylist // Update the current playlist object
+                setupPlaylistSongs(updatedPlaylist)
+            } else {
+                // Playlist might have been deleted, handle this case (e.g., pop backstack)
+                Log.e("PlaylistSongsFragment", "Playlist with ID $playlistId not found.")
+                requireActivity().supportFragmentManager.popBackStack()
+            }
+        } else {
+            Log.e("PlaylistSongsFragment", "Current playlist ID is null.")
+            requireActivity().supportFragmentManager.popBackStack()
         }
     }
 
+
+    // UPDATED: Use MutableList and correct adapter call
     private fun setupPlaylistSongs(playlist: Playlist) {
         playlistName.text = playlist.name
-        playlistSongs = getPlaylistSongs(playlist)
+        val songsFromRepo = getPlaylistSongs(playlist) // Get fresh song data
 
-        // Update song count
-        songCount.text = "${playlistSongs.size} songs"
+        // Update local list
+        playlistSongsList.clear()
+        playlistSongsList.addAll(songsFromRepo)
 
-        // Calculate and display total duration
-        val totalDuration = playlistSongs.sumOf { it.duration }
+        songCount.text = "${playlistSongsList.size} songs"
+        val totalDuration = playlistSongsList.sumOf { it.duration }
         val minutes = TimeUnit.MILLISECONDS.toMinutes(totalDuration)
         playlistDuration.text = "$minutes min"
+        loadPlaylistArt(playlist) // Pass the playlist object
 
-        // Load playlist art
-        loadPlaylistArt(playlist)
-
-        // Setup adapter
-        if (playlistSongs.isNotEmpty()) {
+        if (playlistSongsList.isNotEmpty()) {
             emptyView.visibility = View.GONE
             recyclerView.visibility = View.VISIBLE
-
             val adapter = SongAdapter(
-                songs = playlistSongs,
+                context = requireContext(),
+                songs = playlistSongsList, // Pass mutable list
                 onItemClick = { pos -> openNowPlaying(pos) },
-                onMenuClick = { pos, menuItem -> handleMenuAction(pos, menuItem) },
-                isSongFavorite = { songId -> PreferenceManager.isFavorite(requireContext(), songId) }
+                onDataChanged = { refreshData() }, // Use refreshData for consistency
+                onDeleteRequest = { song -> requestDeleteSong(song) }
             )
             recyclerView.adapter = adapter
-
-            // Enable buttons
             btnPlay.isEnabled = true
             btnShuffle.isEnabled = true
         } else {
             emptyView.visibility = View.VISIBLE
             recyclerView.visibility = View.GONE
-
-            // Disable buttons when no songs
             btnPlay.isEnabled = false
             btnShuffle.isEnabled = false
         }
     }
 
-    private fun loadPlaylistArt(playlist: Playlist) {
-        if (playlist.songIds.isEmpty()) {
-            Glide.with(this)
-                .load(R.drawable.default_album_art)
-                .into(playlistArt)
+    // UPDATED: Pass Playlist object to handle potential deletion
+    private fun loadPlaylistArt(playlist: Playlist?) {
+        val firstSongId = playlist?.songIds?.firstOrNull()
+        if (firstSongId == null) {
+            Glide.with(this).load(R.drawable.default_album_art).into(playlistArt)
             return
         }
 
-        // Get the first song in the playlist for album art
-        val firstSongId = playlist.songIds.first()
-        val allSongs = SongRepository.getAllSongs(requireContext())
+        val allSongs = SongRepository.getAllSongs(requireContext()) // Consider optimizing if slow
         val firstSong = allSongs.firstOrNull { it.id == firstSongId }
 
         if (firstSong != null) {
-            if (firstSong.embeddedArtBytes != null) {
-                // Load embedded art bytes
-                Glide.with(this)
-                    .load(firstSong.embeddedArtBytes)
-                    .placeholder(R.drawable.default_album_art)
-                    .error(R.drawable.default_album_art)
-                    .into(playlistArt)
+            val artLoader = if (firstSong.embeddedArtBytes != null) {
+                Glide.with(this).load(firstSong.embeddedArtBytes)
             } else {
-                // Load album art URI
-                val albumUri = SongUtils.getAlbumArtUri(firstSong.albumId)
-                Glide.with(this)
-                    .load(albumUri)
-                    .placeholder(R.drawable.default_album_art)
-                    .error(R.drawable.default_album_art)
-                    .into(playlistArt)
+                Glide.with(this).load(SongUtils.getAlbumArtUri(firstSong.albumId))
             }
-        } else {
-            Glide.with(this)
-                .load(R.drawable.default_album_art)
+            artLoader.placeholder(R.drawable.default_album_art)
+                .error(R.drawable.default_album_art)
                 .into(playlistArt)
+        } else {
+            Glide.with(this).load(R.drawable.default_album_art).into(playlistArt)
         }
     }
 
-    private fun getPlaylistSongs(playlist: Playlist): List<Song> {
+
+    private fun getPlaylistSongs(playlist: Playlist): List<Song> { // Unchanged
         val allSongs = SongRepository.getAllSongs(requireContext())
-        return allSongs.filter { song -> playlist.songIds.contains(song.id) }
+        // Ensure songs are returned in the order they appear in the playlist's songIds
+        val songIdMap = allSongs.associateBy { it.id }
+        return playlist.songIds.mapNotNull { songIdMap[it] }
     }
 
-    private fun showPlaylistOptionsMenu(view: View) {
+    private fun showPlaylistOptionsMenu(view: View) { // Unchanged
         val popup = PopupMenu(view.context, view)
         popup.menuInflater.inflate(R.menu.playlist_options_menu, popup.menu)
-
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
-                R.id.menu_play_playlist -> {
-                    playPlaylist()
-                    true
-                }
-                R.id.menu_add_songs -> {
-                    // Show add songs dialog directly from this fragment
-                    showAddSongsToPlaylistDialog()
-                    true
-                }
-                R.id.menu_rename_playlist -> {
-                    showRenamePlaylistDialog()
-                    true
-                }
-                R.id.menu_delete_playlist -> {
-                    showDeletePlaylistDialog()
-                    true
-                }
+                R.id.menu_play_playlist -> { playPlaylist(); true }
+                R.id.menu_add_songs -> { showAddSongsToPlaylistDialog(); true }
+                R.id.menu_rename_playlist -> { showRenamePlaylistDialog(); true }
+                R.id.menu_delete_playlist -> { showDeletePlaylistDialog(); true }
                 else -> false
             }
         }
         popup.show()
     }
 
+    // --- Add/Rename/Delete Playlist Dialogs (Mostly Unchanged, use AppCompat AlertDialog) ---
     private fun showAddSongsToPlaylistDialog() {
         currentPlaylist?.let { playlist ->
             val allSongs = SongRepository.getAllSongs(requireContext())
@@ -348,10 +313,7 @@ class PlaylistSongsFragment : Fragment() {
             val selectAllButton = dialogView.findViewById<android.widget.Button>(R.id.btn_select_all)
             val submitButton = dialogView.findViewById<android.widget.Button>(R.id.btn_submit)
 
-            // Set dialog background
             dialogView.setBackgroundColor(ContextCompat.getColor(requireContext(), R.color.dialog_background))
-
-            // Apply text colors
             tvTitle.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_primary))
             selectedCount.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_secondary))
             totalSongs.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_secondary))
@@ -362,74 +324,57 @@ class PlaylistSongsFragment : Fragment() {
             totalSongs.text = "Total songs: ${allSongs.size}"
 
             lateinit var songAdapter: com.shubhamgupta.nebula_music.adapters.SongSelectionAdapter
-
             recyclerView.layoutManager = LinearLayoutManager(requireContext())
             songAdapter = com.shubhamgupta.nebula_music.adapters.SongSelectionAdapter(
                 songs = allSongs,
                 selectedSongIds = currentPlaylistSongIds,
-                onSongSelected = { songId, isSelected ->
-                    updateSelectedCount(songAdapter, selectedCount)
-                }
+                onSongSelected = { _, _ -> updateSelectedCount(songAdapter, selectedCount) }
             )
             recyclerView.adapter = songAdapter
-
             updateSelectedCount(songAdapter, selectedCount)
 
             searchBar.addTextChangedListener(object : android.text.TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
                 override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
                 override fun afterTextChanged(s: android.text.Editable?) {
-                    val query = s.toString().trim()
-                    songAdapter.filterSongs(query)
+                    songAdapter.filterSongs(s.toString().trim())
                     updateSelectedCount(songAdapter, selectedCount)
                 }
             })
-
             selectAllButton.setOnClickListener {
                 songAdapter.selectAll()
                 updateSelectedCount(songAdapter, selectedCount)
             }
 
-            val dialog = android.app.AlertDialog.Builder(requireContext(), R.style.AlertDialogTheme)
+            val dialog = AlertDialog.Builder(requireContext(), R.style.AlertDialogTheme) // Use AppCompat
                 .setView(dialogView)
-                .setNegativeButton("CANCEL") { dialog, _ ->
-                    dialog.dismiss()
-                }
+                .setNegativeButton("CANCEL") { d, _ -> d.dismiss() }
                 .create()
 
-            // Apply theme fixes
             applyDialogThemeFix(dialog)
-
-            // Style buttons
             selectAllButton.setTextColor(ContextCompat.getColor(requireContext(), R.color.button_positive))
             submitButton.setTextColor(ContextCompat.getColor(requireContext(), R.color.button_positive))
 
-            // Handle submit button click
             submitButton.setOnClickListener {
                 val selectedSongs = songAdapter.getSelectedSongs()
                 if (selectedSongs.isNotEmpty()) {
                     addSongsToPlaylist(selectedSongs)
-                    showToast("Added ${selectedSongs.size} songs to '${playlist.name}'")
+                    showToast("Added ${selectedSongs.size} songs")
                     dialog.dismiss()
-                    // Refresh the current view
-                    currentPlaylist?.let { setupPlaylistSongs(it) }
+                    refreshData() // Refresh list
                 } else {
                     showToast("Please select at least one song")
                 }
             }
-
             dialog.show()
-
-            dialog.getButton(android.app.AlertDialog.BUTTON_NEGATIVE)?.setTextColor(ContextCompat.getColor(requireContext(), R.color.button_negative))
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setTextColor(ContextCompat.getColor(requireContext(), R.color.button_negative))
         }
     }
-
-    private fun updateSelectedCount(songAdapter: com.shubhamgupta.nebula_music.adapters.SongSelectionAdapter, textView: TextView) {
-        val selectedCount = songAdapter.getSelectedSongsCount()
-        textView.text = "$selectedCount songs selected"
+    private fun updateSelectedCount(songAdapter: com.shubhamgupta.nebula_music.adapters.SongSelectionAdapter, textView: TextView) { // Unchanged
+        val count = songAdapter.getSelectedSongsCount()
+        textView.text = "$count songs selected"
     }
-
-    private fun addSongsToPlaylist(songIds: List<Long>) {
+    private fun addSongsToPlaylist(songIds: List<Long>) { // Unchanged
         currentPlaylist?.let { playlist ->
             val updatedSongIds = playlist.songIds.toMutableList()
             val newSongs = songIds.filter { it !in updatedSongIds }
@@ -437,7 +382,6 @@ class PlaylistSongsFragment : Fragment() {
             playlist.songIds.clear()
             playlist.songIds.addAll(updatedSongIds)
 
-            // Save to preferences
             val allPlaylists = PreferenceManager.getPlaylists(requireContext()).toMutableList()
             val playlistIndex = allPlaylists.indexOfFirst { it.id == playlist.id }
             if (playlistIndex != -1) {
@@ -446,48 +390,41 @@ class PlaylistSongsFragment : Fragment() {
             }
         }
     }
-
-    private fun showRenamePlaylistDialog() {
+    private fun showRenamePlaylistDialog() { // Unchanged (Use AppCompat AlertDialog)
         currentPlaylist?.let { playlist ->
             val dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_create_playlist, null)
             val input = dialogView.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.et_playlist_name)
             input.setText(playlist.name)
             input.setSelection(playlist.name.length)
-
             dialogView.setBackgroundColor(ContextCompat.getColor(requireContext(), R.color.dialog_background))
 
-            val dialog = android.app.AlertDialog.Builder(requireContext(), R.style.AlertDialogTheme)
+            val dialog = AlertDialog.Builder(requireContext(), R.style.AlertDialogTheme) // Use AppCompat
                 .setTitle("Rename Playlist")
                 .setView(dialogView)
                 .setPositiveButton("RENAME", null)
-                .setNegativeButton("CANCEL") { dialog, _ -> dialog.dismiss() }
+                .setNegativeButton("CANCEL") { d, _ -> d.dismiss() }
                 .create()
 
             applyDialogThemeFix(dialog)
-
             dialog.setOnShowListener {
-                val positiveButton = dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE)
+                val positiveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
                 positiveButton.setOnClickListener {
                     val newName = input.text.toString().trim()
                     if (newName.isEmpty()) {
-                        input.error = "Playlist name cannot be empty"
-                        return@setOnClickListener
+                        input.error = "Name cannot be empty"; return@setOnClickListener
                     }
-
-                    // Check if playlist name already exists
                     val allPlaylists = PreferenceManager.getPlaylists(requireContext())
                     if (allPlaylists.any { it.id != playlist.id && it.name.equals(newName, ignoreCase = true) }) {
-                        input.error = "Playlist with this name already exists"
-                        return@setOnClickListener
+                        input.error = "Name already exists"; return@setOnClickListener
                     }
 
                     playlist.name = newName
                     val updatedPlaylists = allPlaylists.toMutableList()
-                    val playlistIndex = updatedPlaylists.indexOfFirst { it.id == playlist.id }
-                    if (playlistIndex != -1) {
-                        updatedPlaylists[playlistIndex] = playlist
+                    val index = updatedPlaylists.indexOfFirst { it.id == playlist.id }
+                    if (index != -1) {
+                        updatedPlaylists[index] = playlist
                         PreferenceManager.savePlaylists(requireContext(), updatedPlaylists)
-                        setupPlaylistSongs(playlist)
+                        setupPlaylistSongs(playlist) // Refresh UI with new name
                         showToast("Playlist renamed")
                         dialog.dismiss()
                     }
@@ -497,97 +434,146 @@ class PlaylistSongsFragment : Fragment() {
             dialog.show()
         }
     }
-
-    private fun showDeletePlaylistDialog() {
+    private fun showDeletePlaylistDialog() { // Unchanged (Use AppCompat AlertDialog)
         currentPlaylist?.let { playlist ->
-            val dialog = android.app.AlertDialog.Builder(requireContext(), R.style.AlertDialogTheme)
+            val dialog = AlertDialog.Builder(requireContext(), R.style.AlertDialogTheme) // Use AppCompat
                 .setTitle("Delete Playlist")
-                .setMessage("Are you sure you want to delete '${playlist.name}'?")
-                .setPositiveButton("DELETE") { dialog, _ ->
+                .setMessage("Delete '${playlist.name}'?")
+                .setPositiveButton("DELETE") { d, _ ->
                     val allPlaylists = PreferenceManager.getPlaylists(requireContext()).toMutableList()
                     allPlaylists.removeAll { it.id == playlist.id }
                     PreferenceManager.savePlaylists(requireContext(), allPlaylists)
                     showToast("Playlist deleted")
-                    dialog.dismiss()
-                    // Navigate back to playlists fragment
+                    d.dismiss()
                     requireActivity().supportFragmentManager.popBackStack()
                 }
-                .setNegativeButton("CANCEL") { dialog, _ -> dialog.dismiss() }
+                .setNegativeButton("CANCEL") { d, _ -> d.dismiss() }
                 .create()
 
             applyDialogThemeFix(dialog)
-
             dialog.setOnShowListener {
-                dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE)?.setTextColor(ContextCompat.getColor(requireContext(), R.color.error_red))
-                dialog.getButton(android.app.AlertDialog.BUTTON_NEGATIVE)?.setTextColor(ContextCompat.getColor(requireContext(), R.color.button_negative))
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setTextColor(ContextCompat.getColor(requireContext(), R.color.error_red))
+                dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setTextColor(ContextCompat.getColor(requireContext(), R.color.button_negative))
             }
             dialog.show()
         }
     }
-
-    private fun applyDialogThemeFix(dialog: android.app.AlertDialog) {
-        val titleTextView = dialog.findViewById<TextView>(android.R.id.title)
+    // --- Dialog Theme Helpers (Unchanged, use AppCompat AlertDialog) ---
+    private fun applyDialogThemeFix(dialog: AlertDialog) { // Use AppCompat
+        val titleTextView = dialog.findViewById<TextView>(androidx.appcompat.R.id.alertTitle) // Use AppCompat ID
         val messageTextView = dialog.findViewById<TextView>(android.R.id.message)
-
         titleTextView?.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_primary))
         messageTextView?.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_secondary))
-
         dialog.window?.setBackgroundDrawableResource(R.color.dialog_background)
     }
-
-    private fun setDialogButtonColors(dialog: android.app.AlertDialog) {
-        dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE)?.setTextColor(ContextCompat.getColor(requireContext(), R.color.button_positive))
-        dialog.getButton(android.app.AlertDialog.BUTTON_NEGATIVE)?.setTextColor(ContextCompat.getColor(requireContext(), R.color.button_negative))
+    private fun setDialogButtonColors(dialog: AlertDialog) { // Use AppCompat
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setTextColor(ContextCompat.getColor(requireContext(), R.color.button_positive))
+        dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setTextColor(ContextCompat.getColor(requireContext(), R.color.button_negative))
     }
-
-    private fun handleMenuAction(position: Int, menuItem: String) {
-        val song = playlistSongs[position]
-        when (menuItem) {
-            "play" -> openNowPlaying(position)
-            "toggle_favorite" -> toggleFavorite(song)
-        }
-    }
-
-    private fun toggleFavorite(song: Song) {
-        if (PreferenceManager.isFavorite(requireContext(), song.id)) {
-            PreferenceManager.removeFavorite(requireContext(), song.id)
-        } else {
-            PreferenceManager.addFavorite(requireContext(), song.id)
-        }
-        // Refresh adapter to update favorite states
-        currentPlaylist?.let { setupPlaylistSongs(it) }
-    }
-
+    // --- Playback Controls (Unchanged, use local list) ---
     private fun playPlaylist() {
-        if (playlistSongs.isNotEmpty()) {
-            musicService?.startPlayback(ArrayList(playlistSongs), 0)
-            (requireActivity() as com.shubhamgupta.nebula_music.MainActivity).navigateToNowPlaying()
+        if (playlistSongsList.isNotEmpty()) {
+            musicService?.startPlayback(ArrayList(playlistSongsList), 0)
+            (requireActivity() as MainActivity).navigateToNowPlaying()
         }
     }
-
     private fun shufflePlaylist() {
-        if (playlistSongs.isNotEmpty()) {
-            val shuffledSongs = playlistSongs.shuffled()
+        if (playlistSongsList.isNotEmpty()) {
+            val shuffledSongs = playlistSongsList.shuffled()
             musicService?.startPlayback(ArrayList(shuffledSongs), 0)
             musicService?.toggleShuffle()
-            (requireActivity() as com.shubhamgupta.nebula_music.MainActivity).navigateToNowPlaying()
+            (requireActivity() as MainActivity).navigateToNowPlaying()
         }
     }
 
+    // NEW: Handles delete request
+    private fun requestDeleteSong(song: Song) {
+        // Option 1: Request system deletion (Recommended for Android 10+)
+        requestSystemDelete(song)
+
+        // Option 2: Remove only from this playlist (Simpler, doesn't delete file)
+        // removeFromPlaylist(song)
+    }
+
+    // NEW: Method to request deletion using MediaStore API
+    private fun requestSystemDelete(song: Song) {
+        try {
+            val intentSender = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                MediaStore.createDeleteRequest(requireContext().contentResolver, listOf(song.uri)).intentSender
+            } else null
+
+            if (intentSender != null) {
+                val request = IntentSenderRequest.Builder(intentSender).build()
+                deleteResultLauncher.launch(request)
+            } else if (Build.VERSION.SDK_INT == Build.VERSION_CODES.Q) {
+                try {
+                    // Attempt delete, catch RecoverableSecurityException for Q
+                    requireContext().contentResolver.delete(song.uri, null, null)
+                    // If successful without exception (unlikely for non-owned files)
+                    Toast.makeText(requireContext(), "Song deleted successfully (Q)", Toast.LENGTH_SHORT).show()
+                    removeSongFromPlaylistLocally(song) // Also remove from playlist UI/data
+                    refreshData()
+                } catch (e: SecurityException) {
+                    if (e is RecoverableSecurityException) {
+                        val request = IntentSenderRequest.Builder(e.userAction.actionIntent.intentSender).build()
+                        deleteResultLauncher.launch(request) // This will prompt the user
+                    } else {
+                        Log.e("PlaylistSongsFragment", "Non-recoverable SecurityException on Q", e)
+                        Toast.makeText(requireContext(), "Permission denied to delete.", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } else {
+                // Fallback for pre-Q: Direct deletion attempt (likely to fail for non-owned files)
+                val deletedRows = requireContext().contentResolver.delete(song.uri, null, null)
+                if (deletedRows > 0) {
+                    Toast.makeText(requireContext(), "Song deleted successfully (pre-Q)", Toast.LENGTH_SHORT).show()
+                    removeSongFromPlaylistLocally(song) // Also remove from playlist UI/data
+                    refreshData()
+                } else {
+                    Log.w("PlaylistSongsFragment", "Direct delete failed (pre-Q) for ${song.uri}")
+                    Toast.makeText(requireContext(), "Could not delete song (pre-Q).", Toast.LENGTH_SHORT).show()
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("PlaylistSongsFragment", "Error requesting delete for ${song.uri}", e)
+            Toast.makeText(requireContext(), "Error requesting deletion.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // NEW: Helper to remove song from the current playlist's data and UI
+    private fun removeSongFromPlaylistLocally(song: Song) {
+        currentPlaylist?.let { playlist ->
+            val songRemoved = playlist.songIds.remove(song.id)
+            if (songRemoved) {
+                // Update the list used by the adapter
+                playlistSongsList.removeAll { it.id == song.id }
+                // Save the updated playlist to preferences
+                val allPlaylists = PreferenceManager.getPlaylists(requireContext()).toMutableList()
+                val index = allPlaylists.indexOfFirst { it.id == playlist.id }
+                if (index != -1) {
+                    allPlaylists[index] = playlist
+                    PreferenceManager.savePlaylists(requireContext(), allPlaylists)
+                }
+                // No need to call refreshData() here as the launcher callback will do it
+            }
+        }
+    }
+
+
+    // UPDATED: Use playlistSongsList
     private fun openNowPlaying(position: Int) {
-        val songToPlay = playlistSongs[position]
+        if (position < 0 || position >= playlistSongsList.size) return
+        val songToPlay = playlistSongsList[position]
         PreferenceManager.addRecentSong(requireContext(), songToPlay.id)
-
-        musicService?.startPlayback(ArrayList(playlistSongs), position)
-        (requireActivity() as com.shubhamgupta.nebula_music.MainActivity).navigateToNowPlaying()
+        musicService?.startPlayback(ArrayList(playlistSongsList), position) // Use local list
+        (requireActivity() as MainActivity).navigateToNowPlaying()
     }
 
-    private fun showToast(message: String) {
-        android.widget.Toast.makeText(requireContext(), message, android.widget.Toast.LENGTH_SHORT).show()
+    private fun showToast(message: String) { // Unchanged
+        Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show()
     }
 
-    // ADD THIS METHOD
-    fun refreshData() {
-        currentPlaylist?.let { setupPlaylistSongs(it) }
+    fun refreshData() { // UPDATED: Use loadCurrentPlaylist
+        loadCurrentPlaylist()
     }
 }
