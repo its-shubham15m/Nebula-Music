@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="?attr/colorSurface">
+    android:fitsSystemWindows="true"
+    android:background="@color/colorBackground">
 
     <!-- Header Section -->
     <LinearLayout
@@ -12,7 +14,7 @@
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:padding="20dp"
-        android:background="?attr/colorPrimaryContainer">
+        android:background="@color/colorPrimaryContainer">
 
         <TextView
             android:id="@+id/dialog_title"
@@ -42,13 +44,18 @@
         android:id="@+id/search_container"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        style="@style/Widget.Material3.TextInputLayout.FilledBox"
+        style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
         android:layout_margin="16dp"
-        app:boxBackgroundColor="?attr/colorSurfaceVariant"
         app:hintTextColor="?attr/colorOnSurfaceVariant"
         app:boxStrokeColor="?attr/colorPrimary"
         app:startIconDrawable="@drawable/ic_search"
-        app:startIconTint="?attr/colorOnSurfaceVariant">
+        app:startIconTint="?attr/colorOnSurfaceVariant"
+        app:boxCornerRadiusTopStart="12dp"
+        app:boxCornerRadiusTopEnd="12dp"
+        app:boxCornerRadiusBottomStart="12dp"
+        app:boxCornerRadiusBottomEnd="12dp"
+        app:endIconMode="clear_text"
+        app:endIconTint="?attr/colorOnSurfaceVariant">
 
         <com.google.android.material.textfield.TextInputEditText
             android:id="@+id/search_bar"
@@ -57,7 +64,9 @@
             android:hint="Search songs..."
             android:textColor="?attr/colorOnSurface"
             android:textColorHint="?attr/colorOnSurfaceVariant"
-            android:imeOptions="actionSearch" />
+            android:imeOptions="actionSearch"
+            android:maxLines="1"
+            android:inputType="text" />
 
     </com.google.android.material.textfield.TextInputLayout>
 
@@ -67,50 +76,67 @@
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:paddingHorizontal="8dp" />
+        android:paddingHorizontal="8dp"
+        tools:listitem="@layout/item_song_selection" /> <!-- Add tools:listitem for preview -->
 
-    <!-- Divider -->
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:background="?attr/colorOutline"
-        android:layout_marginTop="8dp" />
-
-    <!-- Footer Section -->
+    <!-- Footer Section (Redesigned) -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
+        android:orientation="vertical"
         android:padding="16dp">
 
-        <TextView
-            android:id="@+id/total_songs"
-            android:layout_width="0dp"
+        <!-- First row -->
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Total songs: 0"
-            android:textSize="14sp"
-            android:textColor="?attr/colorOnSurfaceVariant" />
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="8dp">
 
-        <Button
-            android:id="@+id/btn_select_all"
-            android:layout_width="wrap_content"
+            <TextView
+                android:id="@+id/total_songs"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Total songs: 0"
+                android:textSize="14sp"
+                android:textColor="?attr/colorOnSurfaceVariant" />
+
+            <Button
+                android:id="@+id/btn_select_all"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Select All"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:textColor="?attr/colorPrimary" />
+        </LinearLayout>
+
+        <!-- Second row (Buttons) -->
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Select All"
-            style="@style/Widget.Material3.Button.TextButton"
-            android:textColor="?attr/colorPrimary"
-            android:layout_marginEnd="12dp" />
+            android:orientation="horizontal"
+            android:gravity="end"> <!-- Aligns buttons to the right -->
 
-        <Button
-            android:id="@+id/btn_submit"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="ADD SONGS"
-            style="@style/Widget.Material3.Button"
-            app:backgroundTint="?attr/colorPrimary"
-            android:textColor="?attr/colorOnPrimary" />
+            <Button
+                android:id="@+id/btn_cancel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="CANCEL"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:textStyle="bold"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:layout_marginEnd="12dp" />
 
+            <Button
+                android:id="@+id/btn_submit"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="ADD SONGS"
+                android:textColor="@android:color/white" />
+        </LinearLayout>
     </LinearLayout>
 
 </LinearLayout>
+

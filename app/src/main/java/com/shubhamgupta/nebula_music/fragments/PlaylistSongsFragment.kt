@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.res.Configuration
+import android.graphics.Typeface
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
@@ -312,13 +313,13 @@ class PlaylistSongsFragment : Fragment() {
             val totalSongs = dialogView.findViewById<TextView>(R.id.total_songs)
             val selectAllButton = dialogView.findViewById<android.widget.Button>(R.id.btn_select_all)
             val submitButton = dialogView.findViewById<android.widget.Button>(R.id.btn_submit)
+            // *** FIX: Find the cancel button from the XML layout ***
+            val cancelButton = dialogView.findViewById<android.widget.Button>(R.id.btn_cancel)
 
-            dialogView.setBackgroundColor(ContextCompat.getColor(requireContext(), R.color.dialog_background))
-            tvTitle.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_primary))
-            selectedCount.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_secondary))
-            totalSongs.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_secondary))
-            searchBar.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_primary))
-            searchBar.setHintTextColor(ContextCompat.getColor(requireContext(), R.color.text_hint))
+            // The XML now handles theming with attributes, these lines can be simplified or removed
+            // dialogView.setBackgroundColor(ContextCompat.getColor(requireContext(), R.color.dialog_background))
+            // tvTitle.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_primary))
+            // ... etc.
 
             tvTitle.text = "Add songs to '${playlist.name}'"
             totalSongs.text = "Total songs: ${allSongs.size}"
@@ -346,14 +347,14 @@ class PlaylistSongsFragment : Fragment() {
                 updateSelectedCount(songAdapter, selectedCount)
             }
 
-            val dialog = AlertDialog.Builder(requireContext(), R.style.AlertDialogTheme) // Use AppCompat
+            // *** FIX: Remove the programmatic .setNegativeButton() ***
+            val dialog = AlertDialog.Builder(requireContext(), R.style.AlertDialogTheme)
                 .setView(dialogView)
-                .setNegativeButton("CANCEL") { d, _ -> d.dismiss() }
                 .create()
 
             applyDialogThemeFix(dialog)
             selectAllButton.setTextColor(ContextCompat.getColor(requireContext(), R.color.button_positive))
-            submitButton.setTextColor(ContextCompat.getColor(requireContext(), R.color.button_positive))
+            submitButton.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.white))
 
             submitButton.setOnClickListener {
                 val selectedSongs = songAdapter.getSelectedSongs()
@@ -366,8 +367,22 @@ class PlaylistSongsFragment : Fragment() {
                     showToast("Please select at least one song")
                 }
             }
+
+            // *** FIX: Add the onClick listener for the button from the XML ***
+            cancelButton.setOnClickListener {
+                dialog.dismiss()
+            }
+            // Make text bold for consistency
+            cancelButton.setTypeface(null, Typeface.BOLD)
+
             dialog.show()
-            dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setTextColor(ContextCompat.getColor(requireContext(), R.color.button_negative))
+
+            // Make the dialog fullscreen
+            dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+            dialog.window?.setBackgroundDrawableResource(R.color.dialog_background)
+
+            // *** FIX: Remove the logic for the old programmatic button ***
+            // dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setTextColor(ContextCompat.getColor(requireContext(), R.color.button_negative))
         }
     }
     private fun updateSelectedCount(songAdapter: com.shubhamgupta.nebula_music.adapters.SongSelectionAdapter, textView: TextView) { // Unchanged

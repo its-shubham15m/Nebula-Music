@@ -1,6 +1,7 @@
 package com.shubhamgupta.nebula_music.fragments
 
 import android.app.AlertDialog
+import android.graphics.Typeface
 import android.os.Bundle
 import android.util.Log
 import android.view.*
@@ -339,17 +340,7 @@ class PlaylistsFragment : Fragment() {
         val totalSongs = dialogView.findViewById<TextView>(R.id.total_songs)
         val selectAllButton = dialogView.findViewById<Button>(R.id.btn_select_all)
         val submitButton = dialogView.findViewById<Button>(R.id.btn_submit)
-
-        // Set dialog background
-        dialogView.setBackgroundColor(ContextCompat.getColor(requireContext(), R.color.dialog_background))
-
-        // Apply dark mode text colors
-        tvTitle.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_primary))
-        selectedCount.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_secondary))
-        totalSongs.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_secondary))
-        searchBar.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_primary))
-        searchBar.setHintTextColor(ContextCompat.getColor(requireContext(), R.color.text_hint))
-        searchBar.backgroundTintList = ContextCompat.getColorStateList(requireContext(), R.color.text_primary)
+        val cancelButton = dialogView.findViewById<Button>(R.id.btn_cancel) // Find new CANCEL button
 
         tvTitle.text = "Add songs to '${playlist.name}'"
         totalSongs.text = "Total songs: ${allSongs.size}"
@@ -385,16 +376,7 @@ class PlaylistsFragment : Fragment() {
 
         val dialog = AlertDialog.Builder(requireContext(), R.style.AlertDialogTheme)
             .setView(dialogView)
-            .setNegativeButton("CANCEL") { dialog, _ ->
-                dialog.dismiss()
-                // If it's a new playlist and user cancels without adding songs, delete the empty playlist
-                if (isNewPlaylist && playlist.songIds.isEmpty()) {
-                    playlists.remove(playlist)
-                    PreferenceManager.savePlaylists(requireContext(), playlists)
-                    loadPlaylists()
-                    showToast("Empty playlist deleted")
-                }
-            }
+            // REMOVED .setNegativeButton("CANCEL", ...)
             .create()
 
         // Apply theme fixes
@@ -402,7 +384,7 @@ class PlaylistsFragment : Fragment() {
 
         // Style buttons
         selectAllButton.setTextColor(ContextCompat.getColor(requireContext(), R.color.button_positive))
-        submitButton.setTextColor(ContextCompat.getColor(requireContext(), R.color.button_positive))
+        submitButton.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.white))
 
         // Handle submit button click
         submitButton.setOnClickListener {
@@ -421,9 +403,24 @@ class PlaylistsFragment : Fragment() {
             }
         }
 
+        // Handle new CANCEL button click
+        cancelButton.setOnClickListener {
+            dialog.dismiss()
+            // If it's a new playlist and user cancels without adding songs, delete the empty playlist
+            if (isNewPlaylist && playlist.songIds.isEmpty()) {
+                playlists.remove(playlist)
+                PreferenceManager.savePlaylists(requireContext(), playlists)
+                loadPlaylists()
+                showToast("Empty playlist deleted")
+            }
+        }
+
         dialog.show()
 
-        dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setTextColor(ContextCompat.getColor(requireContext(), R.color.button_negative))
+        // MAKE DIALOG FULLSCREEN
+        dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        // Re-set background after layout change
+        dialog.window?.setBackgroundDrawableResource(R.color.dialog_background)
     }
 
     private fun updateSelectedCount(songAdapter: SongSelectionAdapter, textView: TextView) {
