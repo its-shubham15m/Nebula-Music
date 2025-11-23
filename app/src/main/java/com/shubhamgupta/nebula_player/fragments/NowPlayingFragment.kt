@@ -6,10 +6,13 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.GradientDrawable
+import android.media.MediaMetadataRetriever
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.transition.TransitionManager
 import android.util.Log
 import android.util.TypedValue
 import android.view.LayoutInflater
@@ -26,6 +29,7 @@ import android.widget.Toast
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.ColorUtils
+import androidx.core.graphics.createBitmap
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -44,19 +48,15 @@ import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.shubhamgupta.nebula_player.MainActivity
 import com.shubhamgupta.nebula_player.R
-import com.shubhamgupta.nebula_player.api.LrcLibApiClient
-import com.shubhamgupta.nebula_player.models.Song
-import com.shubhamgupta.nebula_player.service.MusicService
-import com.shubhamgupta.nebula_player.utils.SongUtils
-import com.shubhamgupta.nebula_player.utils.Utils
-import com.shubhamgupta.nebula_player.utils.PreferenceManager
-import android.graphics.drawable.GradientDrawable
-import android.media.MediaMetadataRetriever
-import android.transition.TransitionManager
-import androidx.core.graphics.createBitmap
 import com.shubhamgupta.nebula_player.adapters.LyricLine
 import com.shubhamgupta.nebula_player.adapters.LyricsAdapter
+import com.shubhamgupta.nebula_player.api.LrcLibApiClient
 import com.shubhamgupta.nebula_player.models.LrcLibLyrics
+import com.shubhamgupta.nebula_player.models.Song
+import com.shubhamgupta.nebula_player.service.MusicService
+import com.shubhamgupta.nebula_player.utils.PreferenceManager
+import com.shubhamgupta.nebula_player.utils.SongUtils
+import com.shubhamgupta.nebula_player.utils.Utils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -114,13 +114,18 @@ class NowPlayingFragment : Fragment() {
     private lateinit var queueManager: NowPlayingQueueManager
 
     // Smooth scroller to center items
+    // FIX: Using SNAP_TO_ANY + custom calculation ensures the item is exactly centered
     private val smoothScroller by lazy {
         object : LinearSmoothScroller(context) {
             override fun getVerticalSnapPreference(): Int {
-                return SNAP_TO_START
+                return SNAP_TO_ANY
             }
             override fun calculateDtToFit(viewStart: Int, viewEnd: Int, boxStart: Int, boxEnd: Int, snapPreference: Int): Int {
                 return (boxStart + (boxEnd - boxStart) / 2) - (viewStart + (viewEnd - viewStart) / 2)
+            }
+            // Slow down the scroll slightly for a smoother feel
+            override fun calculateTimeForScrolling(dx: Int): Int {
+                return super.calculateTimeForScrolling(dx) * 2
             }
         }
     }
@@ -140,7 +145,7 @@ class NowPlayingFragment : Fragment() {
                         syncLyrics(currentPosition.toLong())
                     }
                 }
-                // Updated to 50ms for smoother lyrics gradient animation (Left-to-Right glow)
+                // 50ms update for smooth karaoke fill animation
                 handler.postDelayed(this, 50)
             }
         }
@@ -294,6 +299,15 @@ class NowPlayingFragment : Fragment() {
         }
         lyricsRecyclerView.layoutManager = LinearLayoutManager(context)
         lyricsRecyclerView.adapter = lyricsAdapter
+
+        // FIX: Add substantial padding to the top and bottom of the RecyclerView.
+        // This allows the first and last items to be scrolled to the exact center.
+        // We do this via post to ensure we have the height.
+        lyricsRecyclerView.post {
+            val padding = (lyricsRecyclerView.height * 0.40).toInt() // 40% padding top/bottom
+            lyricsRecyclerView.setPadding(0, padding, 0, padding)
+            lyricsRecyclerView.clipToPadding = false
+        }
     }
 
     private fun applySystemWindowInsets(view: View) {
