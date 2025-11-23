@@ -15,7 +15,7 @@ data class LyricLine(
 )
 
 class LyricsAdapter(
-    private val onLyricClick: (LyricLine) -> Unit // Changed to pass LyricLine
+    private val onLyricClick: (LyricLine) -> Unit
 ) : RecyclerView.Adapter<LyricsAdapter.LyricViewHolder>() {
 
     private var lyrics: List<LyricLine> = emptyList()
@@ -33,6 +33,7 @@ class LyricsAdapter(
             val prevIndex = activeIndex
             activeIndex = index
 
+            // Notify specific items to animate/update their state
             if (prevIndex != -1) notifyItemChanged(prevIndex)
             notifyItemChanged(activeIndex)
         }
@@ -57,15 +58,24 @@ class LyricsAdapter(
             tvLine.text = line.text
 
             if (isActive) {
+                // Active State: Bright White, Bold, Larger, Glow Effect
                 tvLine.setTextColor(Color.WHITE)
-                tvLine.textSize = 24f // Slightly larger active font
+                tvLine.textSize = 28f // Industry standard: Active line is significantly larger
                 tvLine.setTypeface(null, Typeface.BOLD)
                 tvLine.alpha = 1.0f
+
+                // Add Glow Effect (Shadow Layer)
+                // Radius: 25 creates a soft, Apple Music-style glow.
+                tvLine.setShadowLayer(25f, 0f, 0f, Color.WHITE)
             } else {
+                // Inactive State: Dimmed, Normal Size, No Glow
                 tvLine.setTextColor(Color.parseColor("#B0FFFFFF"))
-                tvLine.textSize = 16f
+                tvLine.textSize = 18f
                 tvLine.setTypeface(null, Typeface.NORMAL)
-                tvLine.alpha = 0.7f
+                tvLine.alpha = 0.6f
+
+                // Remove Glow Effect
+                tvLine.setShadowLayer(0f, 0f, 0f, 0)
             }
 
             // Handle click to seek

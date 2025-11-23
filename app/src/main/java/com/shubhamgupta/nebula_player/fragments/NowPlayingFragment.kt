@@ -23,18 +23,18 @@ import android.widget.ProgressBar
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
-import androidx.cardview.widget.CardView
+import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.ColorUtils
-import androidx.core.view.WindowCompat
 import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.palette.graphics.Palette
 import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
 import androidx.recyclerview.widget.LinearSmoothScroller
+import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.DataSource
 import com.bumptech.glide.load.engine.GlideException
@@ -52,6 +52,7 @@ import com.shubhamgupta.nebula_player.utils.Utils
 import com.shubhamgupta.nebula_player.utils.PreferenceManager
 import android.graphics.drawable.GradientDrawable
 import android.media.MediaMetadataRetriever
+import android.transition.TransitionManager
 import androidx.core.graphics.createBitmap
 import com.shubhamgupta.nebula_player.adapters.LyricLine
 import com.shubhamgupta.nebula_player.adapters.LyricsAdapter
@@ -71,6 +72,7 @@ class NowPlayingFragment : Fragment() {
 
     private var isSharing = false
 
+    // Views
     private lateinit var seekBar: SeekBar
     private lateinit var tvCurrent: TextView
     private lateinit var tvTotal: TextView
@@ -93,8 +95,12 @@ class NowPlayingFragment : Fragment() {
     private lateinit var artistScrollView: HorizontalScrollView
     private lateinit var detailsScrollView: HorizontalScrollView
 
+    // Containers for swapping
+    private lateinit var artInfoContainer: View
+    private lateinit var lyricsContainer: View
+    private lateinit var mainContentContainer: ViewGroup
+
     // Lyrics UI Components
-    private lateinit var lyricsOverlay: View
     private lateinit var lyricsLoadingProgress: ProgressBar
     private lateinit var lyricsRecyclerView: RecyclerView
     private lateinit var lyricsPlainScrollView: View
@@ -239,6 +245,7 @@ class NowPlayingFragment : Fragment() {
     }
 
     private fun initializeViews(view: View) {
+        mainContentContainer = view.findViewById(R.id.main_content_container)
         seekBar = view.findViewById(R.id.seek_bar)
         tvCurrent = view.findViewById(R.id.tv_current)
         tvTotal = view.findViewById(R.id.tv_total)
@@ -261,11 +268,14 @@ class NowPlayingFragment : Fragment() {
         artistScrollView = view.findViewById(R.id.artist_scroll_view)
         detailsScrollView = view.findViewById(R.id.details_scroll_view)
 
+        // Swappable Containers
+        artInfoContainer = view.findViewById(R.id.art_info_container)
+        lyricsContainer = view.findViewById(R.id.lyrics_container)
+
         // Initialize Lyrics Views
-        lyricsOverlay = view.findViewById(R.id.lyrics_overlay)
         lyricsLoadingProgress = view.findViewById(R.id.lyrics_loading_progress)
         lyricsRecyclerView = view.findViewById(R.id.lyrics_recycler_view)
-        lyricsPlainScrollView = view.findViewById(R.id.lyrics_scroll_view)
+        lyricsPlainScrollView = view.findViewById(R.id.lyrics_plain_scroll_view)
         tvLyricsPlain = view.findViewById(R.id.tv_lyrics_plain)
 
         setupLyricsAdapter()
@@ -298,8 +308,9 @@ class NowPlayingFragment : Fragment() {
                 topControls.paddingBottom
             )
 
+            // Adjust main_play_controls margin to account for navbar
             val mainPlayControlsLayoutParams = mainPlayControls.layoutParams as ViewGroup.MarginLayoutParams
-            val totalBottomMargin = systemBarsInsets.bottom + dpToPx(BOTTOM_CONTROLS_OFFSET_DP)
+            val totalBottomMargin = systemBarsInsets.bottom + dpToPx(50) // Matches XML margin
 
             mainPlayControlsLayoutParams.bottomMargin = totalBottomMargin
             mainPlayControls.layoutParams = mainPlayControlsLayoutParams
@@ -323,7 +334,7 @@ class NowPlayingFragment : Fragment() {
         }
 
         bottomSheetView.findViewById<View>(R.id.btn_share_song).setOnClickListener {
-            shareCurrentSong()
+            shareSongFile()
             bottomSheetDialog.dismiss()
         }
 
@@ -360,65 +371,58 @@ class NowPlayingFragment : Fragment() {
         btnPrev.setOnClickListener { musicService?.playPrevious() }
         btnNext.setOnClickListener { musicService?.playNext() }
         btnRepeat.setOnClickListener { toggleRepeat() }
-        btnShare.setOnClickListener { shareCurrentSong() }
+        btnShare.setOnClickListener { shareSongFile() }
         btnDetails.setOnClickListener { showSongDetailsSheet() }
         btnQueue.setOnClickListener { queueManager.showQueueDialog() }
         ivFavorite.setOnClickListener { toggleFavorite() }
 
-        // --- Lyrics Toggles ---
+        // --- Lyrics Interactions ---
+        // Tap Album Art to show Lyrics
         ivAlbumArt.setOnClickListener { toggleLyricsVisibility() }
 
-        // Close lyrics on tapping empty space
-        lyricsOverlay.setOnClickListener { toggleLyricsVisibility() }
+        // Tap Lyrics Container to go back to Album Art
+        lyricsContainer.setOnClickListener { toggleLyricsVisibility() }
+
+        // Ensure child clicks also toggle visibility if they don't consume the event
+        // (Note: RecyclerView items consume clicks, but padding areas might not)
+        lyricsRecyclerView.setOnClickListener { toggleLyricsVisibility() }
         lyricsPlainScrollView.setOnClickListener { toggleLyricsVisibility() }
         tvLyricsPlain.setOnClickListener { toggleLyricsVisibility() }
     }
 
     private fun toggleLyricsVisibility() {
         isLyricsVisible = !isLyricsVisible
+
+        // Animate layout changes using TransitionManager
+        TransitionManager.beginDelayedTransition(mainContentContainer)
+
         if (isLyricsVisible) {
-            // Show with Fade In
-            lyricsOverlay.alpha = 0f
-            lyricsOverlay.visibility = View.VISIBLE
-            lyricsOverlay.animate().alpha(1f).setDuration(300).start()
+            // Show Lyrics, Hide Art (Use INVISIBLE to keep layout space)
+            lyricsContainer.visibility = View.VISIBLE
+            artInfoContainer.visibility = View.INVISIBLE
 
             val song = musicService?.getCurrentSong()
             if (song != null) {
                 fetchLyrics(song)
             }
         } else {
-            // Hide with Fade Out
-            lyricsOverlay.animate().alpha(0f).setDuration(300).withEndAction {
-                lyricsOverlay.visibility = View.GONE
-            }.start()
+            // Hide Lyrics, Show Art
+            lyricsContainer.visibility = View.GONE
+            artInfoContainer.visibility = View.VISIBLE
         }
     }
 
     /**
      * Helper function to clean Metadata before sending to API
-     * Removes:
-     * - Content in brackets () [] {}
-     * - File extensions
-     * - Common spam domains/suffixes (e.g. - Pagalworld, www...)
      */
     private fun cleanMetaData(text: String?): String {
         if (text.isNullOrEmpty()) return ""
-
         var cleaned = text
-
-        // 1. Remove file extensions
         cleaned = cleaned.replace(Regex("(?i)\\.(mp3|m4a|flac|wav|aac|ogg)$"), "")
-
-        // 2. Remove content in brackets/parentheses
         cleaned = cleaned.replace(Regex("\\(.*?\\)"), "")
         cleaned = cleaned.replace(Regex("\\[.*?\\]"), "")
         cleaned = cleaned.replace(Regex("\\{.*?\\}"), "")
-
-        // 3. Remove specific website/spam patterns
-        // Pattern: " - WebsiteName", " @ Website", "www.Website.com"
-        // Aggressive strip of known domains/keywords often found in pirated tags
         cleaned = cleaned.replace(Regex("(?i)\\s*[-_]?\\s*(?:www\\.|pagal|hindi|mr[-]?jatt|dj|wap|songs\\.pk|\\d+kbps|org|net|com|mobi|info|ru).*"), "")
-
         return cleaned.trim()
     }
 
@@ -438,22 +442,17 @@ class NowPlayingFragment : Fragment() {
 
         lifecycleScope.launch {
             try {
-                // --- APPLY CLEANING HERE ---
                 val cleanTitle = cleanMetaData(song.title)
                 val cleanArtist = cleanMetaData(song.artist ?: "")
                 val cleanAlbum = cleanMetaData(song.album ?: "")
                 val durationSeconds = (song.duration / 1000).toInt()
 
-                Log.d("Lyrics", "Fetching for: '$cleanTitle' by '$cleanArtist'")
-
                 val lyricResult = withContext(Dispatchers.IO) {
                     var result: LrcLibLyrics? = null
                     try {
-                        // 1. Try Strict Matching with cleaned data
                         result = LrcLibApiClient.api.getLyrics(cleanTitle, cleanArtist, cleanAlbum, durationSeconds)
                     } catch (e: Exception) {
                         try {
-                            // 2. Fallback to Search
                             val query = "$cleanTitle $cleanArtist"
                             val searchResults = LrcLibApiClient.api.searchLyrics(query)
                             result = searchResults.minByOrNull { abs((it.duration ?: 0) - durationSeconds) }
@@ -511,9 +510,7 @@ class NowPlayingFragment : Fragment() {
             else -> R.drawable.repeat
         }
         btnRepeat.setImageResource(iconRes)
-
-        val color = ContextCompat.getColor(requireContext(), R.color.white)
-        btnRepeat.setColorFilter(color)
+        btnRepeat.setColorFilter(ContextCompat.getColor(requireContext(), R.color.white))
     }
 
     private fun showSongDetailsSheet() {
@@ -617,16 +614,25 @@ class NowPlayingFragment : Fragment() {
         musicService?.togglePlayPause()
     }
 
-    private fun shareCurrentSong() {
-        val currentSong = musicService?.getCurrentSong() ?: return
+    /**
+     * Logic to share the actual audio file via Intent
+     */
+    private fun shareSongFile() {
+        val song = musicService?.getCurrentSong() ?: return
         isSharing = true
-        val shareIntent = Intent().apply {
-            action = Intent.ACTION_SEND
-            type = "text/plain"
-            putExtra(Intent.EXTRA_TEXT,
-                "Listening to \"${currentSong.title}\" by ${currentSong.artist ?: "Unknown Artist"} on Nebula Music")
+        try {
+            val shareIntent = Intent().apply {
+                action = Intent.ACTION_SEND
+                putExtra(Intent.EXTRA_STREAM, song.uri)
+                // Attempt to resolve type, fallback to audio/*
+                type = requireContext().contentResolver.getType(song.uri) ?: "audio/*"
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(Intent.createChooser(shareIntent, "Share ${song.title}"))
+        } catch (e: Exception) {
+            Log.e("NowPlayingFragment", "Error sharing song file", e)
+            Toast.makeText(requireContext(), "Could not share file.", Toast.LENGTH_SHORT).show()
         }
-        startActivity(Intent.createChooser(shareIntent, "Share Song"))
     }
 
     private fun toggleFavorite() {

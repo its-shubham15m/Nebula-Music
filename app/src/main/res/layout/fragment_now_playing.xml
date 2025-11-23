@@ -7,8 +7,10 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:fitsSystemWindows="false"
-    android:background="@android:color/transparent">
+    android:background="@android:color/transparent"
+    android:animateLayoutChanges="true">
 
+    <!-- Backgrounds -->
     <ImageView
         android:id="@+id/background_gradient"
         android:layout_width="match_parent"
@@ -30,6 +32,7 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintBottom_toBottomOf="parent" />
 
+    <!-- 1. TOP CONTROLS -->
     <LinearLayout
         android:id="@+id/top_controls"
         android:layout_width="match_parent"
@@ -81,103 +84,190 @@
             android:layout_marginStart="8dp" />
     </LinearLayout>
 
-    <com.google.android.material.imageview.ShapeableImageView
-        android:id="@+id/album_art"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        android:scaleType="centerCrop"
-        android:src="@drawable/default_album_art"
-        app:shapeAppearanceOverlay="@style/ShapeAppearance.App.CornerRound"
-        app:layout_constraintDimensionRatio="1:1"
+    <!-- 2. MAIN CONTENT AREA (Art + Info) -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/art_info_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
         app:layout_constraintTop_toBottomOf="@id/top_controls"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintWidth_percent="0.9"
-        app:layout_constraintWidth_max="400dp"
-        android:contentDescription="Album Art"/>
+        app:layout_constraintEnd_toEndOf="parent">
 
-    <!-- LYRICS OVERLAY (INCLUDED) -->
-    <!-- Constraint parameters are applied to the included layout root view -->
-    <include
-        android:id="@+id/lyrics_overlay"
-        layout="@layout/layout_lyrics_overlay"
+        <com.google.android.material.imageview.ShapeableImageView
+            android:id="@+id/album_art"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:scaleType="centerCrop"
+            android:src="@drawable/default_album_art"
+            app:shapeAppearanceOverlay="@style/ShapeAppearance.App.CornerRound"
+            app:layout_constraintDimensionRatio="1:1"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintWidth_percent="0.9"
+            app:layout_constraintWidth_max="400dp"
+            android:contentDescription="Album Art"/>
+
+        <HorizontalScrollView
+            android:id="@+id/title_scroll_view"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:scrollbars="none"
+            android:fillViewport="true"
+            app:layout_constraintTop_toBottomOf="@id/album_art"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent">
+
+            <TextView
+                android:id="@+id/song_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:paddingHorizontal="20dp"
+                android:singleLine="true"
+                android:ellipsize="none"
+                android:textSize="24sp"
+                android:textStyle="bold"
+                android:textColor="@color/white"
+                tools:text="Song Title" />
+        </HorizontalScrollView>
+
+        <HorizontalScrollView
+            android:id="@+id/artist_scroll_view"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:scrollbars="none"
+            android:fillViewport="true"
+            app:layout_constraintTop_toBottomOf="@id/title_scroll_view"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent">
+
+            <TextView
+                android:id="@+id/song_artist"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:paddingHorizontal="20dp"
+                android:singleLine="true"
+                android:ellipsize="none"
+                android:textSize="18sp"
+                android:textColor="@color/white"
+                tools:text="Artist Name" />
+        </HorizontalScrollView>
+
+        <HorizontalScrollView
+            android:id="@+id/details_scroll_view"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:scrollbars="none"
+            android:fillViewport="true"
+            app:layout_constraintTop_toBottomOf="@id/artist_scroll_view"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent">
+
+            <TextView
+                android:id="@+id/song_details"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:paddingHorizontal="20dp"
+                android:singleLine="true"
+                android:ellipsize="none"
+                android:textSize="14sp"
+                android:textColor="@color/white"
+                tools:text="Album Name | 2024" />
+        </HorizontalScrollView>
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <!-- 3. LYRICS CONTAINER (Overlay) -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/lyrics_container"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        app:layout_constraintTop_toTopOf="@id/album_art"
-        app:layout_constraintBottom_toBottomOf="@id/album_art"
-        app:layout_constraintStart_toStartOf="@id/album_art"
-        app:layout_constraintEnd_toEndOf="@id/album_art" />
+        android:layout_marginHorizontal="20dp"
+        app:cardCornerRadius="24dp"
+        app:cardBackgroundColor="@android:color/transparent"
+        app:cardElevation="0dp"
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="@id/art_info_container"
+        app:layout_constraintBottom_toBottomOf="@id/art_info_container"
+        app:layout_constraintStart_toStartOf="@id/art_info_container"
+        app:layout_constraintEnd_toEndOf="@id/art_info_container">
 
-    <HorizontalScrollView
-        android:id="@+id/title_scroll_view"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:scrollbars="none"
-        android:fillViewport="true"
-        app:layout_constraintTop_toBottomOf="@id/album_art"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent">
 
-        <TextView
-            android:id="@+id/song_title"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:paddingHorizontal="20dp"
-            android:singleLine="true"
-            android:ellipsize="none"
-            android:textSize="24sp"
-            android:textStyle="bold"
-            android:textColor="@color/white"
-            tools:text="Song Title" />
-    </HorizontalScrollView>
+            <View
+                android:id="@+id/lyrics_bg_dim"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:background="@android:color/transparent"
+                app:layout_constraintHeight_percent="0.75"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"/>
 
-    <HorizontalScrollView
-        android:id="@+id/artist_scroll_view"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:scrollbars="none"
-        android:fillViewport="true"
-        app:layout_constraintTop_toBottomOf="@id/title_scroll_view"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
+            <ProgressBar
+                android:id="@+id/lyrics_loading_progress"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:visibility="gone"
+                android:indeterminateTint="@color/white"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"/>
 
-        <TextView
-            android:id="@+id/song_artist"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:paddingHorizontal="20dp"
-            android:singleLine="true"
-            android:ellipsize="none"
-            android:textSize="18sp"
-            android:textColor="@color/white"
-            tools:text="Artist Name" />
-    </HorizontalScrollView>
+            <!-- Plain Lyrics: Constrained to 75% height, centered -->
+            <ScrollView
+                android:id="@+id/lyrics_plain_scroll_view"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:padding="24dp"
+                android:scrollbars="none"
+                android:fillViewport="true"
+                android:visibility="gone"
+                app:layout_constraintHeight_percent="0.75"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent">
 
-    <HorizontalScrollView
-        android:id="@+id/details_scroll_view"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:scrollbars="none"
-        android:fillViewport="true"
-        app:layout_constraintTop_toBottomOf="@id/artist_scroll_view"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
+                <TextView
+                    android:id="@+id/tv_lyrics_plain"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:textColor="@color/white"
+                    android:textSize="20sp"
+                    android:lineSpacingExtra="10dp"
+                    android:paddingBottom="50dp"
+                    tools:text="Plain lyrics text..."/>
+            </ScrollView>
 
-        <TextView
-            android:id="@+id/song_details"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:paddingHorizontal="20dp"
-            android:singleLine="true"
-            android:ellipsize="none"
-            android:textSize="14sp"
-            android:textColor="@color/white"
-            tools:text="Album Name | 2024" />
-    </HorizontalScrollView>
+            <!-- Synced Lyrics: Constrained to 75% height, centered -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/lyrics_recycler_view"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:clipToPadding="false"
+                android:scrollbars="none"
+                android:visibility="gone"
+                tools:listitem="@layout/item_lyric"
+                app:layout_constraintHeight_percent="0.75"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"/>
+        </androidx.constraintlayout.widget.ConstraintLayout>
 
+    </androidx.cardview.widget.CardView>
+
+
+    <!-- 4. MIDDLE CONTROLS -->
     <LinearLayout
         android:id="@+id/middle_controls"
         android:layout_width="match_parent"
@@ -185,7 +275,7 @@
         android:orientation="horizontal"
         android:gravity="center_vertical"
         android:layout_marginTop="16dp"
-        app:layout_constraintTop_toBottomOf="@id/details_scroll_view"
+        app:layout_constraintTop_toBottomOf="@id/art_info_container"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
@@ -203,6 +293,7 @@
             android:layout_marginEnd="16dp"/>
     </LinearLayout>
 
+    <!-- 5. SEEKBAR & TIMERS -->
     <SeekBar
         android:id="@+id/seek_bar"
         android:layout_width="0dp"
@@ -238,6 +329,7 @@
         android:layout_marginEnd="16dp"
         app:layout_constraintEnd_toEndOf="parent"/>
 
+    <!-- 6. MAIN PLAY CONTROLS -->
     <LinearLayout
         android:id="@+id/main_play_controls"
         android:layout_width="wrap_content"
