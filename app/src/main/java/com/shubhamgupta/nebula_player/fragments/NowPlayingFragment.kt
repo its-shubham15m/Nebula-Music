@@ -140,7 +140,8 @@ class NowPlayingFragment : Fragment() {
                         syncLyrics(currentPosition.toLong())
                     }
                 }
-                handler.postDelayed(this, 250)
+                // Updated to 50ms for smoother lyrics gradient animation (Left-to-Right glow)
+                handler.postDelayed(this, 50)
             }
         }
     }
@@ -148,7 +149,10 @@ class NowPlayingFragment : Fragment() {
     private fun syncLyrics(currentPosition: Long) {
         if (!isLyricsVisible || currentLyricsList.isEmpty()) return
 
-        // Find the line that is currently playing
+        // 1. Pass current time to adapter for the gradient animation
+        lyricsAdapter.updateCurrentTime(currentPosition)
+
+        // 2. Find the line that is currently playing for scrolling
         val activeIndex = currentLyricsList.indexOfLast { it.startTime <= currentPosition }
 
         if (activeIndex != -1 && activeIndex != lyricsAdapter.activeIndex) {

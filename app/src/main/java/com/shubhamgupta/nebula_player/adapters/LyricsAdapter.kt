@@ -1,6 +1,8 @@
 package com.shubhamgupta.nebula_player.adapters
 
 import android.graphics.Color
+import android.graphics.LinearGradient
+import android.graphics.Shader
 import android.graphics.Typeface
 import android.view.LayoutInflater
 import android.view.View
@@ -11,7 +13,8 @@ import com.shubhamgupta.nebula_player.R
 
 data class LyricLine(
     val startTime: Long,
-    val text: String
+    val text: String,
+    val endTime: Long // Added to calculate duration
 )
 
 class LyricsAdapter(
@@ -22,10 +25,22 @@ class LyricsAdapter(
     var activeIndex: Int = -1
         private set
 
+    // Store current player time to calculate gradient progress
+    private var currentPlaybackTime: Long = 0
+
     fun submitList(parsedLyrics: List<LyricLine>) {
         this.lyrics = parsedLyrics
         this.activeIndex = -1
         notifyDataSetChanged()
+    }
+
+    // Called frequently by NowPlayingFragment to animate the wipe
+    fun updateCurrentTime(time: Long) {
+        currentPlaybackTime = time
+        if (activeIndex != -1 && activeIndex < lyrics.size) {
+            // Only re-bind the active item to update the gradient shader
+            notifyItemChanged(activeIndex, "PAYLOAD_TIME_UPDATE")
+        }
     }
 
     fun updateActiveLine(index: Int) {
@@ -33,8 +48,9 @@ class LyricsAdapter(
             val prevIndex = activeIndex
             activeIndex = index
 
-            // Notify specific items to animate/update their state
+            // Refresh previous line to remove active state
             if (prevIndex != -1) notifyItemChanged(prevIndex)
+            // Refresh new line to apply active state
             notifyItemChanged(activeIndex)
         }
     }
@@ -45,8 +61,17 @@ class LyricsAdapter(
     }
 
     override fun onBindViewHolder(holder: LyricViewHolder, position: Int) {
-        val line = lyrics[position]
-        holder.bind(line, position == activeIndex)
+        // Standard bind
+        holder.bind(lyrics[position], position == activeIndex)
+    }
+
+    override fun onBindViewHolder(holder: LyricViewHolder, position: Int, payloads: MutableList<Any>) {
+        if (payloads.isNotEmpty() && payloads.contains("PAYLOAD_TIME_UPDATE")) {
+            // Efficient update: only update the gradient, don't reset text/listeners
+            holder.updateGradientOnly(lyrics[position], currentPlaybackTime)
+        } else {
+            super.onBindViewHolder(holder, position, payloads)
+        }
     }
 
     override fun getItemCount(): Int = lyrics.size
@@ -58,38 +83,84 @@ class LyricsAdapter(
             tvLine.text = line.text
 
             if (isActive) {
-                // Active State: Bright White, Bold, Larger, Glow Effect
-                tvLine.setTextColor(Color.WHITE)
-                tvLine.textSize = 28f // Industry standard: Active line is significantly larger
+                // Base Active Style
+                tvLine.textSize = 28f
                 tvLine.setTypeface(null, Typeface.BOLD)
                 tvLine.alpha = 1.0f
-
-                // Add Glow Effect (Shadow Layer)
-                // Radius: 25 creates a soft, Apple Music-style glow.
+                // Base outer glow (ShadowLayer) - Static glow for readability
                 tvLine.setShadowLayer(25f, 0f, 0f, Color.WHITE)
+
+                // Apply the Gradient/Fill logic
+                updateGradientOnly(line, currentPlaybackTime)
+
             } else {
-                // Inactive State: Dimmed, Normal Size, No Glow
+                // Inactive Style
                 tvLine.setTextColor(Color.parseColor("#B0FFFFFF"))
                 tvLine.textSize = 18f
                 tvLine.setTypeface(null, Typeface.NORMAL)
                 tvLine.alpha = 0.6f
-
-                // Remove Glow Effect
                 tvLine.setShadowLayer(0f, 0f, 0f, 0)
+                // Clear any shaders
+                tvLine.paint.shader = null
             }
 
-            // Handle click to seek
             itemView.setOnClickListener {
                 onLyricClick(line)
+            }
+        }
+
+        fun updateGradientOnly(line: LyricLine, currentTime: Long) {
+            // Calculate duration
+            val duration = line.endTime - line.startTime
+
+            // CONDITION: Apply "Apple Music" wipe only if line is longer than 4 seconds (4000ms)
+            if (duration > 4000) {
+                val width = tvLine.paint.measureText(tvLine.text.toString())
+                if (width > 0) {
+                    // Calculate percentage (0.0 to 1.0)
+                    val progress = (currentTime - line.startTime).toFloat() / duration.toFloat()
+                    val clampedProgress = progress.coerceIn(0f, 1f)
+
+                    // Create a gradient that transitions from Bright White to Dim White
+                    // The transition point moves based on time.
+                    // Colors: [Active Color, Active Color, Inactive Color, Inactive Color]
+                    // Positions: [0, progress, progress + slight_blur, 1]
+
+                    val gradient = LinearGradient(
+                        0f, 0f, width, 0f,
+                        intArrayOf(
+                            Color.WHITE,          // Filled part
+                            Color.WHITE,
+                            Color.parseColor("#80FFFFFF"), // Unfilled part (dimmer)
+                            Color.parseColor("#80FFFFFF")
+                        ),
+                        floatArrayOf(
+                            clampedProgress,
+                            clampedProgress,
+                            clampedProgress + 0.05f, // Small fade edge
+                            1f
+                        ),
+                        Shader.TileMode.CLAMP
+                    )
+
+                    tvLine.setTextColor(Color.WHITE) // Fallback
+                    tvLine.paint.shader = gradient
+                    tvLine.invalidate()
+                }
+            } else {
+                // Short line: Just Solid White (Standard Glow from bind)
+                tvLine.paint.shader = null
+                tvLine.setTextColor(Color.WHITE)
             }
         }
     }
 
     companion object {
         fun parseLrc(lrcString: String): List<LyricLine> {
-            val lines = mutableListOf<LyricLine>()
+            val tempLines = mutableListOf<LyricLine>()
             val regex = Regex("\\[(\\d+):(\\d+(\\.\\d+)?)\\](.*)")
 
+            // 1. Parse lines
             lrcString.lines().forEach { line ->
                 if (line.isNotBlank()) {
                     val match = regex.find(line)
@@ -99,12 +170,32 @@ class LyricsAdapter(
                             val min = minStr.toLong()
                             val sec = secStr.toDouble()
                             val timeMillis = (min * 60 * 1000) + (sec * 1000).toLong()
-                            lines.add(LyricLine(timeMillis, text.trim()))
+                            // Store with dummy end time initially
+                            tempLines.add(LyricLine(timeMillis, text.trim(), 0L))
                         } catch (e: Exception) { }
                     }
                 }
             }
-            return lines.sortedBy { it.startTime }
+
+            // 2. Sort by start time
+            val sortedLines = tempLines.sortedBy { it.startTime }
+
+            // 3. Calculate End Times
+            val finalLines = mutableListOf<LyricLine>()
+            for (i in sortedLines.indices) {
+                val current = sortedLines[i]
+                val nextStartTime = if (i < sortedLines.size - 1) {
+                    sortedLines[i + 1].startTime
+                } else {
+                    current.startTime + 5000 // Default 5s for last line
+                }
+
+                finalLines.add(
+                    LyricLine(current.startTime, current.text, nextStartTime)
+                )
+            }
+
+            return finalLines
         }
     }
 }
