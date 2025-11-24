@@ -10,7 +10,6 @@
     android:background="@android:color/transparent"
     android:animateLayoutChanges="true">
 
-    <!-- Backgrounds -->
     <ImageView
         android:id="@+id/background_gradient"
         android:layout_width="match_parent"
@@ -32,7 +31,6 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintBottom_toBottomOf="parent" />
 
-    <!-- 1. TOP CONTROLS -->
     <LinearLayout
         android:id="@+id/top_controls"
         android:layout_width="match_parent"
@@ -84,7 +82,6 @@
             android:layout_marginStart="8dp" />
     </LinearLayout>
 
-    <!-- 2. MAIN CONTENT AREA (Art + Info) -->
     <androidx.constraintlayout.widget.ConstraintLayout
         android:id="@+id/art_info_container"
         android:layout_width="match_parent"
@@ -180,12 +177,11 @@
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 
-    <!-- 3. LYRICS CONTAINER (Overlay) -->
     <androidx.cardview.widget.CardView
         android:id="@+id/lyrics_container"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:layout_marginHorizontal="20dp"
+        android:layout_marginHorizontal="12dp"
         app:cardCornerRadius="24dp"
         app:cardBackgroundColor="@android:color/transparent"
         app:cardElevation="0dp"
@@ -204,7 +200,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
                 android:background="@android:color/transparent"
-                app:layout_constraintHeight_percent="0.75"
+                app:layout_constraintHeight_percent="0.9"
                 app:layout_constraintTop_toTopOf="parent"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
@@ -221,16 +217,15 @@
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintEnd_toEndOf="parent"/>
 
-            <!-- Plain Lyrics: Constrained to 75% height, centered -->
             <ScrollView
                 android:id="@+id/lyrics_plain_scroll_view"
                 android:layout_width="0dp"
                 android:layout_height="0dp"
-                android:padding="24dp"
+                android:padding="16dp"
                 android:scrollbars="none"
                 android:fillViewport="true"
                 android:visibility="gone"
-                app:layout_constraintHeight_percent="0.75"
+                app:layout_constraintHeight_percent="0.9"
                 app:layout_constraintTop_toTopOf="parent"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
@@ -248,7 +243,6 @@
                     tools:text="Plain lyrics text..."/>
             </ScrollView>
 
-            <!-- Synced Lyrics: Constrained to 75% height, centered -->
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/lyrics_recycler_view"
                 android:layout_width="0dp"
@@ -257,7 +251,7 @@
                 android:scrollbars="none"
                 android:visibility="gone"
                 tools:listitem="@layout/item_lyric"
-                app:layout_constraintHeight_percent="0.75"
+                app:layout_constraintHeight_percent="0.9"
                 app:layout_constraintTop_toTopOf="parent"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
@@ -267,7 +261,6 @@
     </androidx.cardview.widget.CardView>
 
 
-    <!-- 4. MIDDLE CONTROLS -->
     <LinearLayout
         android:id="@+id/middle_controls"
         android:layout_width="match_parent"
@@ -293,7 +286,6 @@
             android:layout_marginEnd="16dp"/>
     </LinearLayout>
 
-    <!-- 5. SEEKBAR & TIMERS -->
     <SeekBar
         android:id="@+id/seek_bar"
         android:layout_width="0dp"
@@ -329,7 +321,6 @@
         android:layout_marginEnd="16dp"
         app:layout_constraintEnd_toEndOf="parent"/>
 
-    <!-- 6. MAIN PLAY CONTROLS -->
     <LinearLayout
         android:id="@+id/main_play_controls"
         android:layout_width="wrap_content"
