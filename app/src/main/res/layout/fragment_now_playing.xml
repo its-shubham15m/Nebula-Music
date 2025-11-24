@@ -7,8 +7,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:fitsSystemWindows="false"
-    android:background="@android:color/transparent"
-    android:animateLayoutChanges="true">
+    android:background="@android:color/transparent">
 
     <ImageView
         android:id="@+id/background_gradient"
@@ -105,75 +104,63 @@
             app:layout_constraintWidth_max="400dp"
             android:contentDescription="Album Art"/>
 
-        <HorizontalScrollView
-            android:id="@+id/title_scroll_view"
+        <!-- Main Song Title -->
+        <TextView
+            android:id="@+id/song_title"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:scrollbars="none"
-            android:fillViewport="true"
+            android:layout_marginHorizontal="20dp"
+            android:gravity="start"
+            android:singleLine="true"
+            android:ellipsize="marquee"
+            android:marqueeRepeatLimit="marquee_forever"
+            android:scrollHorizontally="true"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:textColor="@color/white"
             app:layout_constraintTop_toBottomOf="@id/album_art"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent">
+            app:layout_constraintEnd_toEndOf="parent"
+            tools:text="Song Title" />
 
-            <TextView
-                android:id="@+id/song_title"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:paddingHorizontal="20dp"
-                android:singleLine="true"
-                android:ellipsize="none"
-                android:textSize="24sp"
-                android:textStyle="bold"
-                android:textColor="@color/white"
-                tools:text="Song Title" />
-        </HorizontalScrollView>
-
-        <HorizontalScrollView
-            android:id="@+id/artist_scroll_view"
+        <!-- Main Song Artist -->
+        <TextView
+            android:id="@+id/song_artist"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:scrollbars="none"
-            android:fillViewport="true"
-            app:layout_constraintTop_toBottomOf="@id/title_scroll_view"
+            android:layout_marginHorizontal="20dp"
+            android:gravity="start"
+            android:singleLine="true"
+            android:ellipsize="marquee"
+            android:marqueeRepeatLimit="marquee_forever"
+            android:scrollHorizontally="true"
+            android:textSize="18sp"
+            android:textColor="@color/white"
+            app:layout_constraintTop_toBottomOf="@id/song_title"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent">
+            app:layout_constraintEnd_toEndOf="parent"
+            tools:text="Artist Name" />
 
-            <TextView
-                android:id="@+id/song_artist"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:paddingHorizontal="20dp"
-                android:singleLine="true"
-                android:ellipsize="none"
-                android:textSize="18sp"
-                android:textColor="@color/white"
-                tools:text="Artist Name" />
-        </HorizontalScrollView>
-
-        <HorizontalScrollView
-            android:id="@+id/details_scroll_view"
+        <!-- Main Song Details -->
+        <TextView
+            android:id="@+id/song_details"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            android:scrollbars="none"
-            android:fillViewport="true"
-            app:layout_constraintTop_toBottomOf="@id/artist_scroll_view"
+            android:layout_marginHorizontal="20dp"
+            android:gravity="start"
+            android:singleLine="true"
+            android:ellipsize="marquee"
+            android:marqueeRepeatLimit="marquee_forever"
+            android:scrollHorizontally="true"
+            android:textSize="14sp"
+            android:textColor="@color/white"
+            app:layout_constraintTop_toBottomOf="@id/song_artist"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent">
-
-            <TextView
-                android:id="@+id/song_details"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:paddingHorizontal="20dp"
-                android:singleLine="true"
-                android:ellipsize="none"
-                android:textSize="14sp"
-                android:textColor="@color/white"
-                tools:text="Album Name | 2024" />
-        </HorizontalScrollView>
+            app:layout_constraintEnd_toEndOf="parent"
+            tools:text="Album Name | 2024" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 
@@ -261,18 +248,68 @@
     </androidx.cardview.widget.CardView>
 
 
+    <!-- FIXED HEIGHT set to 64dp to prevent SeekBar jump when content swaps -->
     <LinearLayout
         android:id="@+id/middle_controls"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="38dp"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:layout_marginTop="16dp"
+        android:layout_marginTop="12dp"
         app:layout_constraintTop_toBottomOf="@id/art_info_container"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
+        <!-- Icon for Now Playing (Left of Text) -->
+        <ImageView
+            android:id="@+id/iv_now_playing_icon"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:src="@drawable/ic_music_note_selected"
+            android:layout_marginStart="16dp"
+            app:tint="@color/white"
+            android:visibility="gone"
+            android:contentDescription="Now Playing" />
+
+        <!-- Now Playing Details Header for Lyrics View -->
+        <LinearLayout
+            android:id="@+id/lyrics_header_info"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center_vertical|start"
+            android:paddingStart="12dp"
+            android:paddingEnd="8dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/tv_lyrics_song_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/white"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:singleLine="true"
+                android:ellipsize="marquee"
+                android:marqueeRepeatLimit="marquee_forever"
+                android:scrollHorizontally="true"/>
+
+            <TextView
+                android:id="@+id/tv_lyrics_song_artist"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="#CCFFFFFF"
+                android:textSize="12sp"
+                android:singleLine="true"
+                android:ellipsize="marquee"
+                android:layout_marginTop="2dp"
+                tools:text="Artist Name"/>
+        </LinearLayout>
+
+        <!-- Spacer to push favorite to right when lyrics header is hidden -->
         <View
+            android:id="@+id/middle_controls_spacer"
             android:layout_width="0dp"
             android:layout_height="0dp"
             android:layout_weight="1" />
@@ -290,7 +327,7 @@
         android:id="@+id/seek_bar"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginTop="18dp"
+        android:layout_marginTop="16dp"
         android:layout_marginBottom="30dp"
         android:progressTint="@color/white"
         android:thumbTint="@color/white"

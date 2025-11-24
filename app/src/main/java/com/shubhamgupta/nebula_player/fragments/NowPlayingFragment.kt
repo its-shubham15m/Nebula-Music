@@ -18,6 +18,7 @@ import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.LinearInterpolator
 import android.widget.HorizontalScrollView
 import android.widget.ImageButton
 import android.widget.ImageView
@@ -86,14 +87,21 @@ class NowPlayingFragment : Fragment() {
     private lateinit var btnQueue: ImageButton
     private lateinit var ivFavorite: ImageView
     private lateinit var ivAlbumArt: ImageView
+
+    // Main Song Info Views
     private lateinit var tvSongTitle: TextView
     private lateinit var tvSongArtist: TextView
     private lateinit var tvSongDetails: TextView
+
+    // Lyrics Header Views (The one next to Favorite icon)
+    private lateinit var lyricsHeaderInfo: View
+    private lateinit var middleControlsSpacer: View
+    private lateinit var ivNowPlayingIcon: ImageView
+    private lateinit var tvLyricsSongTitle: TextView
+    private lateinit var tvLyricsSongArtist: TextView
+
     private lateinit var backgroundGradient: ImageView
     private lateinit var backgroundOverlay: View
-    private lateinit var titleScrollView: HorizontalScrollView
-    private lateinit var artistScrollView: HorizontalScrollView
-    private lateinit var detailsScrollView: HorizontalScrollView
 
     // Containers for swapping
     private lateinit var artInfoContainer: View
@@ -114,7 +122,6 @@ class NowPlayingFragment : Fragment() {
     private lateinit var queueManager: NowPlayingQueueManager
 
     // Smooth scroller to center items
-    // FIX: Using SNAP_TO_ANY + custom calculation ensures the item is exactly centered
     private val smoothScroller by lazy {
         object : LinearSmoothScroller(context) {
             override fun getVerticalSnapPreference(): Int {
@@ -123,7 +130,6 @@ class NowPlayingFragment : Fragment() {
             override fun calculateDtToFit(viewStart: Int, viewEnd: Int, boxStart: Int, boxEnd: Int, snapPreference: Int): Int {
                 return (boxStart + (boxEnd - boxStart) / 2) - (viewStart + (viewEnd - viewStart) / 2)
             }
-            // Slow down the scroll slightly for a smoother feel
             override fun calculateTimeForScrolling(dx: Int): Int {
                 return super.calculateTimeForScrolling(dx) * 2
             }
@@ -140,12 +146,9 @@ class NowPlayingFragment : Fragment() {
                     if (duration > 0) {
                         seekBar.progress = currentPosition
                         tvCurrent.text = Utils.formatTime(currentPosition.toLong())
-
-                        // Sync Lyrics
                         syncLyrics(currentPosition.toLong())
                     }
                 }
-                // 50ms update for smooth karaoke fill animation
                 handler.postDelayed(this, 50)
             }
         }
@@ -154,10 +157,8 @@ class NowPlayingFragment : Fragment() {
     private fun syncLyrics(currentPosition: Long) {
         if (!isLyricsVisible || currentLyricsList.isEmpty()) return
 
-        // 1. Pass current time to adapter for the gradient animation
         lyricsAdapter.updateCurrentTime(currentPosition)
 
-        // 2. Find the line that is currently playing for scrolling
         val activeIndex = currentLyricsList.indexOfLast { it.startTime <= currentPosition }
 
         if (activeIndex != -1 && activeIndex != lyricsAdapter.activeIndex) {
@@ -170,10 +171,6 @@ class NowPlayingFragment : Fragment() {
             }
         }
     }
-
-    private var titleAnimator: ValueAnimator? = null
-    private var artistAnimator: ValueAnimator? = null
-    private var detailsAnimator: ValueAnimator? = null
 
     private val songChangeReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -214,8 +211,6 @@ class NowPlayingFragment : Fragment() {
 
     companion object {
         fun newInstance(): NowPlayingFragment = NowPlayingFragment()
-        private const val SCROLL_SPEED_PIXELS_PER_SECOND = 40
-        private const val BOTTOM_CONTROLS_OFFSET_DP = 90
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -268,14 +263,21 @@ class NowPlayingFragment : Fragment() {
         btnQueue = view.findViewById(R.id.btn_queue)
         ivFavorite = view.findViewById(R.id.iv_fav)
         ivAlbumArt = view.findViewById(R.id.album_art)
+
+        // Main Info
         tvSongTitle = view.findViewById(R.id.song_title)
         tvSongArtist = view.findViewById(R.id.song_artist)
         tvSongDetails = view.findViewById(R.id.song_details)
+
+        // Lyrics Header Info
+        lyricsHeaderInfo = view.findViewById(R.id.lyrics_header_info)
+        middleControlsSpacer = view.findViewById(R.id.middle_controls_spacer)
+        ivNowPlayingIcon = view.findViewById(R.id.iv_now_playing_icon)
+        tvLyricsSongTitle = view.findViewById(R.id.tv_lyrics_song_title)
+        tvLyricsSongArtist = view.findViewById(R.id.tv_lyrics_song_artist)
+
         backgroundGradient = view.findViewById(R.id.background_gradient)
         backgroundOverlay = view.findViewById(R.id.background_overlay)
-        titleScrollView = view.findViewById(R.id.title_scroll_view)
-        artistScrollView = view.findViewById(R.id.artist_scroll_view)
-        detailsScrollView = view.findViewById(R.id.details_scroll_view)
 
         // Swappable Containers
         artInfoContainer = view.findViewById(R.id.art_info_container)
@@ -293,18 +295,14 @@ class NowPlayingFragment : Fragment() {
     }
 
     private fun setupLyricsAdapter() {
-        // On lyric click, seek to that timestamp
         lyricsAdapter = LyricsAdapter { line ->
             musicService?.seekTo(line.startTime.toInt())
         }
         lyricsRecyclerView.layoutManager = LinearLayoutManager(context)
         lyricsRecyclerView.adapter = lyricsAdapter
 
-        // FIX: Add substantial padding to the top and bottom of the RecyclerView.
-        // This allows the first and last items to be scrolled to the exact center.
-        // We do this via post to ensure we have the height.
         lyricsRecyclerView.post {
-            val padding = (lyricsRecyclerView.height * 0.40).toInt() // 40% padding top/bottom
+            val padding = (lyricsRecyclerView.height * 0.40).toInt()
             lyricsRecyclerView.setPadding(0, padding, 0, padding)
             lyricsRecyclerView.clipToPadding = false
         }
@@ -326,9 +324,8 @@ class NowPlayingFragment : Fragment() {
                 topControls.paddingBottom
             )
 
-            // Adjust main_play_controls margin to account for navbar
             val mainPlayControlsLayoutParams = mainPlayControls.layoutParams as ViewGroup.MarginLayoutParams
-            val totalBottomMargin = systemBarsInsets.bottom + dpToPx(50) // Matches XML margin
+            val totalBottomMargin = systemBarsInsets.bottom + dpToPx(50)
 
             mainPlayControlsLayoutParams.bottomMargin = totalBottomMargin
             mainPlayControls.layoutParams = mainPlayControlsLayoutParams
@@ -394,15 +391,9 @@ class NowPlayingFragment : Fragment() {
         btnQueue.setOnClickListener { queueManager.showQueueDialog() }
         ivFavorite.setOnClickListener { toggleFavorite() }
 
-        // --- Lyrics Interactions ---
-        // Tap Album Art to show Lyrics
         ivAlbumArt.setOnClickListener { toggleLyricsVisibility() }
-
-        // Tap Lyrics Container to go back to Album Art
         lyricsContainer.setOnClickListener { toggleLyricsVisibility() }
 
-        // Ensure child clicks also toggle visibility if they don't consume the event
-        // (Note: RecyclerView items consume clicks, but padding areas might not)
         lyricsRecyclerView.setOnClickListener { toggleLyricsVisibility() }
         lyricsPlainScrollView.setOnClickListener { toggleLyricsVisibility() }
         tvLyricsPlain.setOnClickListener { toggleLyricsVisibility() }
@@ -411,28 +402,37 @@ class NowPlayingFragment : Fragment() {
     private fun toggleLyricsVisibility() {
         isLyricsVisible = !isLyricsVisible
 
-        // Animate layout changes using TransitionManager
+        // Use TransitionManager ONLY on the containers changing to avoid affecting Seekbar
         TransitionManager.beginDelayedTransition(mainContentContainer)
 
         if (isLyricsVisible) {
-            // Show Lyrics, Hide Art (Use INVISIBLE to keep layout space)
             lyricsContainer.visibility = View.VISIBLE
             artInfoContainer.visibility = View.INVISIBLE
+
+            // Show new Details Header & Icon, hide Spacer
+            lyricsHeaderInfo.visibility = View.VISIBLE
+            ivNowPlayingIcon.visibility = View.VISIBLE
+            middleControlsSpacer.visibility = View.GONE
+
+            // Re-trigger marquee for the header
+            tvLyricsSongTitle.isSelected = true
+            tvLyricsSongArtist.isSelected = true
 
             val song = musicService?.getCurrentSong()
             if (song != null) {
                 fetchLyrics(song)
             }
         } else {
-            // Hide Lyrics, Show Art
             lyricsContainer.visibility = View.GONE
             artInfoContainer.visibility = View.VISIBLE
+
+            // Hide Details Header & Icon, show Spacer
+            lyricsHeaderInfo.visibility = View.GONE
+            ivNowPlayingIcon.visibility = View.GONE
+            middleControlsSpacer.visibility = View.VISIBLE
         }
     }
 
-    /**
-     * Helper function to clean Metadata before sending to API
-     */
     private fun cleanMetaData(text: String?): String {
         if (text.isNullOrEmpty()) return ""
         var cleaned = text
@@ -632,9 +632,6 @@ class NowPlayingFragment : Fragment() {
         musicService?.togglePlayPause()
     }
 
-    /**
-     * Logic to share the actual audio file via Intent
-     */
     private fun shareSongFile() {
         val song = musicService?.getCurrentSong() ?: return
         isSharing = true
@@ -642,7 +639,6 @@ class NowPlayingFragment : Fragment() {
             val shareIntent = Intent().apply {
                 action = Intent.ACTION_SEND
                 putExtra(Intent.EXTRA_STREAM, song.uri)
-                // Attempt to resolve type, fallback to audio/*
                 type = requireContext().contentResolver.getType(song.uri) ?: "audio/*"
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
@@ -680,8 +676,22 @@ class NowPlayingFragment : Fragment() {
     private fun updateSongInfo() {
         val currentSong = musicService?.getCurrentSong() ?: return
         currentSong.isFavorite = PreferenceManager.isFavorite(requireContext(), currentSong.id)
+
+        // Update Main Info
         tvSongTitle.text = currentSong.title
         tvSongArtist.text = currentSong.artist ?: "Unknown Artist"
+
+        // IMPORTANT: Trigger marquee for main info
+        tvSongTitle.isSelected = true
+        tvSongArtist.isSelected = true
+        tvSongDetails.isSelected = true
+
+        // Update Lyrics Header Info
+        tvLyricsSongTitle.text = currentSong.title
+        tvLyricsSongArtist.text = currentSong.artist ?: "Unknown Artist"
+        // IMPORTANT: Trigger marquee for lyrics header
+        tvLyricsSongTitle.isSelected = true
+        tvLyricsSongArtist.isSelected = true
 
         val detailsText = StringBuilder()
         currentSong.album?.let { detailsText.append(it) }
@@ -690,8 +700,6 @@ class NowPlayingFragment : Fragment() {
             detailsText.append(it)
         }
         tvSongDetails.text = detailsText
-
-        resetScrollPositions()
 
         val artLoader = if (currentSong.embeddedArtBytes != null) {
             Glide.with(this).load(currentSong.embeddedArtBytes)
@@ -718,7 +726,6 @@ class NowPlayingFragment : Fragment() {
             val savedState = PreferenceManager.loadPlaybackState(requireContext())
             savedState?.let { state ->
                 if (state.lastPlayedSongId == currentSong.id && state.lastSeekPosition > 0) {
-                    Log.d("NowPlayingFragment", "Restoring seek position: ${state.lastSeekPosition}")
                     handler.post {
                         seekBar.progress = state.lastSeekPosition
                         tvCurrent.text = Utils.formatTime(state.lastSeekPosition.toLong())
@@ -731,13 +738,6 @@ class NowPlayingFragment : Fragment() {
             if (currentSong.isFavorite) R.drawable.ic_favorite_filled
             else R.drawable.ic_favorite_outline
         )
-        startSmoothAutoScrolling()
-    }
-
-    private fun resetScrollPositions() {
-        titleScrollView.scrollTo(0, 0)
-        artistScrollView.scrollTo(0, 0)
-        detailsScrollView.scrollTo(0, 0)
     }
 
     private fun generateGradientBackground(drawable: android.graphics.drawable.Drawable) {
@@ -782,11 +782,8 @@ class NowPlayingFragment : Fragment() {
         val windowController = WindowCompat.getInsetsController(window, window.decorView)
 
         if (isNowPlaying) {
-            // In NowPlayingFragment, we want light-colored icons for the status bar
-            // to be visible on the dark gradient background.
             windowController.isAppearanceLightStatusBars = false
         } else {
-            // When leaving the fragment, restore MainActivity's default UI appearance.
             (activity as? MainActivity)?.updateSystemUiColors()
         }
     }
@@ -797,58 +794,6 @@ class NowPlayingFragment : Fragment() {
 
     private fun stopSeekBarUpdates() {
         handler.removeCallbacks(updateSeekBar)
-    }
-
-    private fun startSmoothAutoScrolling() {
-        stopAutoScrolling()
-        titleScrollView.post {
-            val maxScroll = tvSongTitle.width - titleScrollView.width
-            if (maxScroll > 0) {
-                val duration = (maxScroll.toFloat() / SCROLL_SPEED_PIXELS_PER_SECOND * 1000).toLong()
-                titleAnimator = ValueAnimator.ofInt(0, maxScroll).apply {
-                    this.duration = duration
-                    repeatMode = ValueAnimator.REVERSE
-                    repeatCount = ValueAnimator.INFINITE
-                    addUpdateListener { animator -> titleScrollView.scrollTo(animator.animatedValue as Int, 0) }
-                    startDelay = 2000
-                    start()
-                }
-            }
-        }
-        artistScrollView.post {
-            val maxScroll = tvSongArtist.width - artistScrollView.width
-            if (maxScroll > 0) {
-                val duration = (maxScroll.toFloat() / SCROLL_SPEED_PIXELS_PER_SECOND * 1000).toLong()
-                artistAnimator = ValueAnimator.ofInt(0, maxScroll).apply {
-                    this.duration = duration
-                    repeatMode = ValueAnimator.REVERSE
-                    repeatCount = ValueAnimator.INFINITE
-                    addUpdateListener { animator -> artistScrollView.scrollTo(animator.animatedValue as Int, 0) }
-                    startDelay = 2000
-                    start()
-                }
-            }
-        }
-        detailsScrollView.post {
-            val maxScroll = tvSongDetails.width - detailsScrollView.width
-            if (maxScroll > 0) {
-                val duration = (maxScroll.toFloat() / SCROLL_SPEED_PIXELS_PER_SECOND * 1000).toLong()
-                detailsAnimator = ValueAnimator.ofInt(0, maxScroll).apply {
-                    this.duration = duration
-                    repeatMode = ValueAnimator.REVERSE
-                    repeatCount = ValueAnimator.INFINITE
-                    addUpdateListener { animator -> detailsScrollView.scrollTo(animator.animatedValue as Int, 0) }
-                    startDelay = 2000
-                    start()
-                }
-            }
-        }
-    }
-
-    private fun stopAutoScrolling() {
-        titleAnimator?.cancel()
-        artistAnimator?.cancel()
-        detailsAnimator?.cancel()
     }
 
     override fun onResume() {
@@ -863,7 +808,15 @@ class NowPlayingFragment : Fragment() {
 
         startSeekBarUpdates()
         updatePlaybackControls()
-        startSmoothAutoScrolling()
+
+        // Re-enable marquee when fragment resumes
+        tvSongTitle.isSelected = true
+        tvSongArtist.isSelected = true
+        tvSongDetails.isSelected = true
+        if (isLyricsVisible) {
+            tvLyricsSongTitle.isSelected = true
+            tvLyricsSongArtist.isSelected = true
+        }
     }
 
     override fun onPause() {
@@ -873,7 +826,6 @@ class NowPlayingFragment : Fragment() {
             setSystemBarAppearance(false)
         }
         stopSeekBarUpdates()
-        stopAutoScrolling()
     }
 
     override fun onDestroyView() {
@@ -882,7 +834,6 @@ class NowPlayingFragment : Fragment() {
         isFragmentVisible = false
         queueManager.stopScrollMonitoring()
         stopSeekBarUpdates()
-        stopAutoScrolling()
         if (bottomSheetDialog.isShowing) {
             bottomSheetDialog.dismiss()
         }
