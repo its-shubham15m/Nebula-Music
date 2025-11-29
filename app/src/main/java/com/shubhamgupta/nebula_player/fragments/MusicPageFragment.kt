@@ -139,6 +139,13 @@ class MusicPageFragment : Fragment() {
         updateTabUI(initialPosition)
     }
 
+    // Public method called by HomePageFragment when Audio tab is double-clicked
+    fun switchToSongsTab() {
+        if (this::viewPager.isInitialized) {
+            viewPager.setCurrentItem(0, true) // 0 is Songs, true for smooth animation
+        }
+    }
+
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putString("currentCategory", currentCategory)

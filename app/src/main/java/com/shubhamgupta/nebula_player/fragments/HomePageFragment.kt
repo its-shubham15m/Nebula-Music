@@ -82,10 +82,18 @@ class HomePageFragment : Fragment() {
             true
         }
 
+        // Feature: Handle double-click (Reselection)
         bottomNavigationView.setOnItemReselectedListener { item ->
-            if (item.itemId == R.id.nav_search) {
-                val fragment = childFragmentManager.findFragmentByTag(TAG_SEARCH) as? SearchFragment
-                fragment?.focusSearchInput()
+            when (item.itemId) {
+                R.id.nav_search -> {
+                    val fragment = childFragmentManager.findFragmentByTag(TAG_SEARCH) as? SearchFragment
+                    fragment?.focusSearchInput()
+                }
+                R.id.nav_audio -> {
+                    // If Audio tab is double-clicked, switch to Songs tab inside MusicPage
+                    val fragment = childFragmentManager.findFragmentByTag(TAG_AUDIO) as? MusicPageFragment
+                    fragment?.switchToSongsTab()
+                }
             }
         }
 

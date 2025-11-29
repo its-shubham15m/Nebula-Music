@@ -40,6 +40,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.drawerlayout.widget.DrawerLayout
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.FragmentManager
 import androidx.fragment.app.commit
 import androidx.lifecycle.lifecycleScope
 import com.shubhamgupta.nebula_player.fragments.AboutFragment
@@ -172,6 +173,11 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    // Listener to handle back stack changes automatically
+    private val backStackListener = FragmentManager.OnBackStackChangedListener {
+        handleBackStackChange()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -330,6 +336,9 @@ class MainActivity : AppCompatActivity() {
     private fun initializeAppAfterPermissions() {
         Log.d("MainActivity", "Initializing app after permissions check")
 
+        // Register the back stack listener here
+        supportFragmentManager.addOnBackStackChangedListener(backStackListener)
+
         initializeViews()
         setupMiniPlayerInsets()
         setupSidebarInsets()
@@ -378,6 +387,50 @@ class MainActivity : AppCompatActivity() {
             @Suppress("DEPRECATION")
             registerReceiver(queueUpdateReceiver, filter)
         }
+    }
+
+    // New centralized method to handle state changes based on back stack
+    private fun handleBackStackChange() {
+        val entryCount = supportFragmentManager.backStackEntryCount
+
+        if (entryCount == 0) {
+            // We are back at the Root (Home)
+            currentFragment = "home"
+            isMiniPlayerAllowed = true
+            setDrawerLocked(false)
+
+            val homeFragment = supportFragmentManager.findFragmentByTag("HOME_PAGE_FRAGMENT") as? HomePageFragment
+            homeFragment?.updateMiniPlayerPosition()
+        } else {
+            // We are deeper in the stack, determine current fragment by tag
+            val topEntry = supportFragmentManager.getBackStackEntryAt(entryCount - 1)
+
+            when (topEntry.name) {
+                "settings_page" -> {
+                    currentFragment = "settings"
+                    isMiniPlayerAllowed = false
+                }
+                "equalizer_page" -> {
+                    currentFragment = "equalizer"
+                    isMiniPlayerAllowed = false
+                }
+                "about_page" -> {
+                    currentFragment = "about"
+                    isMiniPlayerAllowed = false
+                }
+                "search_page" -> {
+                    currentFragment = "search"
+                    // Search usually allows mini player, adjust if needed
+                    isMiniPlayerAllowed = true
+                }
+                "now_playing" -> {
+                    currentFragment = "now_playing"
+                    isMiniPlayerAllowed = false
+                    setDrawerLocked(true)
+                }
+            }
+        }
+        updateMiniPlayerVisibility()
     }
 
     private fun setupMiniPlayerInsets() {
@@ -512,18 +565,19 @@ class MainActivity : AppCompatActivity() {
         }
 
         findViewById<View>(R.id.sidebar_equalizer).setOnClickListener {
-            showEqualizerPage()
             drawerLayout.closeDrawer(GravityCompat.START)
+            // Use handler to wait for drawer close if needed, but safe to call immediately with transition flag
+            showEqualizerPage()
         }
 
         findViewById<View>(R.id.sidebar_settings).setOnClickListener {
-            showSettingsPage()
             drawerLayout.closeDrawer(GravityCompat.START)
+            showSettingsPage()
         }
 
         findViewById<View>(R.id.sidebar_about).setOnClickListener {
-            showAboutPage()
             drawerLayout.closeDrawer(GravityCompat.START)
+            showAboutPage()
         }
     }
 
@@ -633,7 +687,7 @@ class MainActivity : AppCompatActivity() {
             currentFragment = "search"
 
             supportFragmentManager.commit {
-                setCustomAnimations(R.anim.slide_in_right, R.anim.slide_out_left)
+                setCustomAnimations(R.anim.slide_in_right, R.anim.slide_out_left, R.anim.slide_in_left, R.anim.slide_out_right)
                 replace(R.id.fragment_container, SearchFragment(), "search_page")
                 setReorderingAllowed(true)
                 addToBackStack("search_page")
@@ -647,21 +701,21 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun showSettingsPage() {
-        if (currentFragment == "settings" || isTransitioning) return
-        isTransitioning = true
+        if (currentFragment == "settings") return
 
+        isTransitioning = true
         currentFragment = "settings"
         // Hide mini player for Settings
         isMiniPlayerAllowed = false
         setMiniPlayerBottomMargin(0)
 
         supportFragmentManager.commit {
-            setCustomAnimations(R.anim.slide_in_right, R.anim.slide_out_left)
+            setCustomAnimations(R.anim.slide_in_right, R.anim.slide_out_left, R.anim.slide_in_left, R.anim.slide_out_right)
             replace(R.id.fragment_container, SettingsFragment(), "settings_page")
             setReorderingAllowed(true)
             addToBackStack("settings_page")
         }
-        drawerLayout.closeDrawer(GravityCompat.START)
+        // No drawer close here, handled in click listener
 
         handler.postDelayed({
             updateMiniPlayerVisibility()
@@ -670,21 +724,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun showEqualizerPage() {
-        if (currentFragment == "equalizer" || isTransitioning) return
-        isTransitioning = true
+        if (currentFragment == "equalizer") return
 
+        isTransitioning = true
         currentFragment = "equalizer"
         // Hide mini player for Equalizer
         isMiniPlayerAllowed = false
         setMiniPlayerBottomMargin(0)
 
         supportFragmentManager.commit {
-            setCustomAnimations(R.anim.slide_in_right, R.anim.slide_out_left)
+            setCustomAnimations(R.anim.slide_in_right, R.anim.slide_out_left, R.anim.slide_in_left, R.anim.slide_out_right)
             replace(R.id.fragment_container, EqualizerFragment(), "equalizer_page")
             setReorderingAllowed(true)
             addToBackStack("equalizer_page")
         }
-        drawerLayout.closeDrawer(GravityCompat.START)
 
         handler.postDelayed({
             updateMiniPlayerVisibility()
@@ -693,21 +746,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun showAboutPage() {
-        if (currentFragment == "about" || isTransitioning) return
-        isTransitioning = true
+        if (currentFragment == "about") return
 
+        isTransitioning = true
         currentFragment = "about"
         // Hide mini player for About
         isMiniPlayerAllowed = false
         setMiniPlayerBottomMargin(0)
 
         supportFragmentManager.commit {
-            setCustomAnimations(R.anim.slide_in_right, R.anim.slide_out_left)
+            setCustomAnimations(R.anim.slide_in_right, R.anim.slide_out_left, R.anim.slide_in_left, R.anim.slide_out_right)
             replace(R.id.fragment_container, AboutFragment(), "about_page")
             setReorderingAllowed(true)
             addToBackStack("about_page")
         }
-        drawerLayout.closeDrawer(GravityCompat.START)
 
         handler.postDelayed({
             updateMiniPlayerVisibility()
@@ -822,9 +874,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun showNowPlayingPage() {
-        if (currentFragment == "now_playing" || isTransitioning) return
-        isTransitioning = true
+        if (currentFragment == "now_playing") return
 
+        isTransitioning = true
         currentFragment = "now_playing"
         drawerLayout.setDrawerLockMode(DrawerLayout.LOCK_MODE_LOCKED_CLOSED)
 
@@ -832,7 +884,7 @@ class MainActivity : AppCompatActivity() {
         setMiniPlayerVisibility(false)
 
         supportFragmentManager.commit {
-            setCustomAnimations(R.anim.slide_up, R.anim.slide_down)
+            setCustomAnimations(R.anim.slide_up, R.anim.slide_down, R.anim.slide_up, R.anim.slide_down)
             replace(R.id.fragment_container, NowPlayingFragment.newInstance(), "NOW_PLAYING_FRAGMENT")
             setReorderingAllowed(true)
             addToBackStack("now_playing")
@@ -871,7 +923,7 @@ class MainActivity : AppCompatActivity() {
 
         if (supportFragmentManager.backStackEntryCount > 0) {
             supportFragmentManager.popBackStack()
-            updateCurrentFragmentAfterBackPress()
+            // The OnBackStackChangedListener will handle state updates automatically
         } else {
             if (backPressCount == 1) {
                 finish()
@@ -881,41 +933,6 @@ class MainActivity : AppCompatActivity() {
                 backPressHandler.postDelayed(backPressRunnable, 2000)
             }
         }
-    }
-
-    private fun updateCurrentFragmentAfterBackPress() {
-        handler.postDelayed({
-            when {
-                supportFragmentManager.findFragmentByTag("HOME_PAGE_FRAGMENT")?.isVisible == true -> {
-                    currentFragment = "home"
-                    isMiniPlayerAllowed = true
-                    drawerLayout.setDrawerLockMode(DrawerLayout.LOCK_MODE_UNLOCKED)
-                    (supportFragmentManager.findFragmentByTag("HOME_PAGE_FRAGMENT") as? HomePageFragment)?.updateMiniPlayerPosition()
-                }
-                supportFragmentManager.findFragmentByTag("settings_page")?.isVisible == true -> {
-                    currentFragment = "settings"
-                    isMiniPlayerAllowed = false
-                }
-                supportFragmentManager.findFragmentByTag("about_page")?.isVisible == true -> {
-                    currentFragment = "about"
-                    isMiniPlayerAllowed = false
-                }
-                supportFragmentManager.findFragmentByTag("equalizer_page")?.isVisible == true -> {
-                    currentFragment = "equalizer"
-                    isMiniPlayerAllowed = false
-                }
-                supportFragmentManager.findFragmentByTag("NOW_PLAYING_FRAGMENT")?.isVisible == true -> {
-                    currentFragment = "now_playing"
-                    isMiniPlayerAllowed = false
-                }
-                else -> {
-                    currentFragment = "home"
-                    isMiniPlayerAllowed = true
-                    drawerLayout.setDrawerLockMode(DrawerLayout.LOCK_MODE_UNLOCKED)
-                }
-            }
-            updateMiniPlayerVisibility()
-        }, 100)
     }
 
     override fun onNewIntent(intent: Intent?) {
@@ -988,6 +1005,7 @@ class MainActivity : AppCompatActivity() {
         }
         try {
             unregisterReceiver(queueUpdateReceiver)
+            supportFragmentManager.removeOnBackStackChangedListener(backStackListener)
         } catch (e: Exception) {
             Log.e("MainActivity", "Error unregistering receiver", e)
         }
