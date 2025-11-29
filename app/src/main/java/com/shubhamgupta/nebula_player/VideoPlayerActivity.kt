@@ -90,6 +90,7 @@ class VideoPlayerActivity : AppCompatActivity() {
     // Overlays
     private lateinit var topControls: LinearLayout
     private lateinit var bottomControls: LinearLayout
+    private lateinit var centerControls: LinearLayout
     private lateinit var touchOverlay: View
     private lateinit var rewindOverlay: FrameLayout
     private lateinit var forwardOverlay: FrameLayout
@@ -237,6 +238,8 @@ class VideoPlayerActivity : AppCompatActivity() {
 
         topControls = findViewById(R.id.top_controls)
         bottomControls = findViewById(R.id.bottom_controls)
+        centerControls = findViewById(R.id.center_controls)
+
         touchOverlay = findViewById(R.id.touch_overlay)
         rewindOverlay = findViewById(R.id.rewind_overlay)
         forwardOverlay = findViewById(R.id.forward_overlay)
@@ -449,14 +452,12 @@ class VideoPlayerActivity : AppCompatActivity() {
 
     private fun tryEnterPiP() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            // Check if device supports PiP
             if (!packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
                 Toast.makeText(this, "Device does not support PiP", Toast.LENGTH_SHORT).show()
                 return
             }
 
             try {
-                // 1. Try to get Aspect Ratio from Player
                 var width = 16
                 var height = 9
 
@@ -465,9 +466,24 @@ class VideoPlayerActivity : AppCompatActivity() {
                     width = videoFormat.width
                     height = videoFormat.height
                 } else if (playerView.width > 0 && playerView.height > 0) {
-                    // 2. Fallback to View Dimensions
                     width = playerView.width
                     height = playerView.height
+                }
+
+                if (width <= 0) width = 16
+                if (height <= 0) height = 9
+
+                var ratio = width.toFloat() / height.toFloat()
+
+                // Clamp Ratio for Android PiP
+                if (ratio < 0.418410f) {
+                    width = 9
+                    height = 21
+                    ratio = width.toFloat() / height.toFloat()
+                } else if (ratio > 2.39f) {
+                    width = 24
+                    height = 10
+                    ratio = width.toFloat() / height.toFloat()
                 }
 
                 val aspectRatio = Rational(width, height)
@@ -477,10 +493,10 @@ class VideoPlayerActivity : AppCompatActivity() {
 
                 enterPictureInPictureMode(params)
             } catch (e: Exception) {
-                // 3. Fallback if Ratio is invalid: Enter PiP without specific ratio
-                Log.e("PiP", "Error entering PiP with ratio, retrying without.", e)
+                Log.e("PiP", "Error entering PiP with custom ratio. Retrying with default.", e)
                 try {
-                    enterPictureInPictureMode(PictureInPictureParams.Builder().build())
+                    val builder = PictureInPictureParams.Builder()
+                    enterPictureInPictureMode(builder.build())
                 } catch (e2: Exception) {
                     Log.e("PiP", "Fatal PiP Error", e2)
                     Toast.makeText(this, "Cannot enter PiP mode", Toast.LENGTH_SHORT).show()
@@ -500,13 +516,30 @@ class VideoPlayerActivity : AppCompatActivity() {
         super.onUserLeaveHint()
     }
 
+    // ==========================================
+    // FIXED: PIP UI HANDLING
+    // ==========================================
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         if (isInPictureInPictureMode) {
-            hideSystemUI()
+            // FORCE HIDE ALL CONTROLS
+            topControls.visibility = View.GONE
+            bottomControls.visibility = View.GONE
+            centerControls.visibility = View.GONE // Hides the big Play/Pause/Next/Prev buttons
+
+            seekPeekContainer.visibility = View.GONE
+            ratioInfoChip.visibility = View.GONE
+            lockOverlay.visibility = View.GONE
+            centerInfoLayout.visibility = View.GONE
+
+            // Disable the touch overlay so clicks go to the system PiP window
+            touchOverlay.visibility = View.GONE
+
             playerView.useController = false
         } else {
+            // Restore UI when returning to full screen
             showSystemUI()
+            touchOverlay.visibility = View.VISIBLE
             playerView.useController = false
         }
     }
@@ -747,7 +780,7 @@ class VideoPlayerActivity : AppCompatActivity() {
 
     @SuppressLint("ClickableViewAccessibility")
     private fun setupGestures() {
-        // NEW: Scale Gesture for Aspect Ratio
+        // Scale Gesture for Aspect Ratio
         scaleGestureDetector = ScaleGestureDetector(this, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
             override fun onScale(detector: ScaleGestureDetector): Boolean {
                 if (isLocked) return false
@@ -964,20 +997,24 @@ class VideoPlayerActivity : AppCompatActivity() {
         seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (fromUser) {
-                    currentTimeView.text = formatDuration(progress.toLong())
-                    seekPeekTime.text = formatDuration(progress.toLong())
+                    val timeString = formatDuration(progress.toLong())
+                    currentTimeView.text = timeString
+                    seekPeekTime.text = timeString
 
                     val width = seekBar!!.width - seekBar!!.paddingLeft - seekBar!!.paddingRight
                     val thumbPos = seekBar!!.paddingLeft + (width * seekBar!!.progress / seekBar!!.max)
-
                     seekPeekContainer.x = seekBar!!.x + thumbPos - (seekPeekContainer.width / 2)
-                    if (seekPeekContainer.visibility != View.VISIBLE) seekPeekContainer.visibility = View.VISIBLE
+
+                    if (seekPeekContainer.visibility != View.VISIBLE) {
+                        seekPeekContainer.visibility = View.VISIBLE
+                    }
                 }
             }
             override fun onStartTrackingTouch(seekBar: SeekBar?) {
                 handler.removeCallbacks(updateProgressAction)
                 resetAutoHideTimer()
                 seekPeekContainer.visibility = View.VISIBLE
+                isSeeking = true
             }
             override fun onStopTrackingTouch(seekBar: SeekBar?) {
                 player?.seekTo(seekBar?.progress?.toLong() ?: 0)
@@ -985,33 +1022,48 @@ class VideoPlayerActivity : AppCompatActivity() {
                 handler.post(updateProgressAction)
                 resetAutoHideTimer()
                 seekPeekContainer.visibility = View.GONE
+                isSeeking = false
             }
         })
     }
 
     private fun hideSystemUI() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode) {
-            return
-        }
+        // FIXED: Removed the check that prevented hiding if in PiP mode.
+        // We WANT to hide everything when in PiP.
 
         WindowCompat.setDecorFitsSystemWindows(window, false)
         val controller = WindowCompat.getInsetsController(window, window.decorView)
         controller.hide(WindowInsetsCompat.Type.systemBars())
         controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+
         topControls.visibility = View.GONE
         bottomControls.visibility = View.GONE
+        centerControls.visibility = View.GONE // Ensure center controls are hidden
+
         seekPeekContainer.visibility = View.GONE
         ratioInfoChip.visibility = View.GONE
     }
 
     private fun showSystemUI() {
+        // Only show if NOT in PiP
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode) return
+
         topControls.visibility = View.VISIBLE
         bottomControls.visibility = View.VISIBLE
+        centerControls.visibility = View.VISIBLE
     }
 
     private fun toggleControls() {
-        if (topControls.visibility == View.VISIBLE) { hideSystemUI(); handler.removeCallbacks(hideControlsRunnable) }
-        else { showSystemUI(); resetAutoHideTimer() }
+        // Don't toggle controls if in PiP
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode) return
+
+        if (topControls.visibility == View.VISIBLE) {
+            hideSystemUI()
+            handler.removeCallbacks(hideControlsRunnable)
+        } else {
+            showSystemUI()
+            resetAutoHideTimer()
+        }
     }
 
     private fun resetAutoHideTimer() {
@@ -1030,6 +1082,7 @@ class VideoPlayerActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode) {
             return
         }
@@ -1039,7 +1092,11 @@ class VideoPlayerActivity : AppCompatActivity() {
                 val id = videoList.getOrNull(currentVideoIndex)?.id
                 if (id != null) PreferenceManager.saveVideoResumePosition(this, id, it.currentPosition)
             }
-            it.pause()
+            if (!isFinishing && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                // Do nothing
+            } else {
+                it.pause()
+            }
         }
 
         val currentVol = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
@@ -1053,13 +1110,9 @@ class VideoPlayerActivity : AppCompatActivity() {
     override fun onStop() {
         super.onStop()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode) {
-            player?.let {
-                if (currentVideoUri != null) {
-                    val id = videoList.getOrNull(currentVideoIndex)?.id
-                    if (id != null) PreferenceManager.saveVideoResumePosition(this, id, it.currentPosition)
-                }
-                it.pause()
-            }
+            // Keep playing
+        } else {
+            player?.pause()
         }
     }
 

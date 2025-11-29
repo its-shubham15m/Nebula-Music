@@ -60,6 +60,7 @@
             android:exported="false"
             android:theme="@style/Theme.NebulaPlayer"
             android:screenOrientation="sensorLandscape"
+            android:supportsPictureInPicture="true"
             android:hardwareAccelerated="true"
             android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout" />
 
