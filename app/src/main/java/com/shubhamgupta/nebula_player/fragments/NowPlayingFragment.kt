@@ -65,6 +65,7 @@ import com.shubhamgupta.nebula_player.utils.PreferenceManager
 import com.shubhamgupta.nebula_player.utils.SongUtils
 import com.shubhamgupta.nebula_player.utils.Utils
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
@@ -127,6 +128,10 @@ class NowPlayingFragment : Fragment() {
     private var currentLyricsSongId: Long = -1
     private var isLyricsVisible = false
 
+    // OPTIMIZATION: Cache and Job management
+    private val lyricsCache = mutableMapOf<Long, LrcLibLyrics?>()
+    private var fetchLyricsJob: Job? = null
+
     private lateinit var queueManager: NowPlayingQueueManager
 
     // Smooth scroller to center items
@@ -186,11 +191,10 @@ class NowPlayingFragment : Fragment() {
                 "SONG_CHANGED" -> {
                     musicService?.getCurrentSong()?.let { song ->
                         song.isFavorite = PreferenceManager.isFavorite(requireContext(), song.id)
-                        if (isLyricsVisible) {
-                            fetchLyrics(song)
-                        } else {
-                            currentLyricsSongId = -1
-                        }
+
+                        // OPTIMIZATION: Always prefetch lyrics on song change
+                        // regardless of whether lyrics are currently visible
+                        fetchLyrics(song)
                     }
                     updateSongInfo()
                     updatePlaybackControls()
@@ -460,7 +464,7 @@ class NowPlayingFragment : Fragment() {
         }
     }
 
-    // Inner Adapter Class for Audio Devices
+    // Place this INSIDE NowPlayingFragment, replacing the old AudioDeviceAdapter class
     inner class AudioDeviceAdapter(
         private val devices: List<AudioDeviceInfo>,
         private val currentDeviceId: Int,
@@ -482,20 +486,20 @@ class NowPlayingFragment : Fragment() {
         inner class DeviceViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
             private val ivIcon: ImageView = itemView.findViewById(R.id.iv_device_icon)
             private val tvName: TextView = itemView.findViewById(R.id.tv_device_name)
-            private val tvType: TextView = itemView.findViewById(R.id.tv_device_type)
-            private val rbSelected: RadioButton = itemView.findViewById(R.id.rb_device_selected)
+            private val tvStatus: TextView = itemView.findViewById(R.id.tv_device_status)
+            private val ivIndicator: ImageView = itemView.findViewById(R.id.iv_active_indicator)
 
             fun bind(device: AudioDeviceInfo, isSelected: Boolean) {
-                // Name logic
+                // 1. Set Text Info
                 val name = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                     device.productName.toString()
                 } else {
                     getDeviceTypeName(device.type)
                 }
                 tvName.text = name
-                tvType.text = getDeviceTypeName(device.type)
+                tvStatus.text = getDeviceTypeName(device.type)
 
-                // Icon logic
+                // 2. Set Icon based on type
                 val iconRes = when(device.type) {
                     AudioDeviceInfo.TYPE_BLUETOOTH_A2DP, AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> R.drawable.ic_bluetooth
                     AudioDeviceInfo.TYPE_WIRED_HEADSET, AudioDeviceInfo.TYPE_WIRED_HEADPHONES -> R.drawable.ic_headset
@@ -503,12 +507,31 @@ class NowPlayingFragment : Fragment() {
                 }
                 ivIcon.setImageResource(iconRes)
 
-                rbSelected.isChecked = isSelected
+                // 3. Spotify-style Active State Logic
+                val spotifyGreen = Color.parseColor("#1DB954")
+                val defaultColor = ContextCompat.getColor(itemView.context, R.color.white) // Or your default text color
+
+                if (isSelected) {
+                    // ACTIVE: Green Text, Green Icon, Indicator Visible
+                    tvName.setTextColor(spotifyGreen)
+                    ivIcon.setColorFilter(spotifyGreen)
+                    ivIndicator.setColorFilter(spotifyGreen)
+                    ivIndicator.visibility = View.VISIBLE
+
+                    tvStatus.text = "Listening on"
+                    tvStatus.setTextColor(spotifyGreen)
+                } else {
+                    // INACTIVE: White Text, White Icon, Indicator Gone
+                    tvName.setTextColor(defaultColor)
+                    ivIcon.clearColorFilter() // Or setColorFilter(defaultColor)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                        ivIcon.imageTintList = android.content.res.ColorStateList.valueOf(defaultColor)
+                    }
+                    ivIndicator.visibility = View.GONE
+                    tvStatus.setTextColor(Color.parseColor("#B3FFFFFF")) // Dimmed white
+                }
 
                 itemView.setOnClickListener {
-                    onDeviceSelected(device)
-                }
-                rbSelected.setOnClickListener {
                     onDeviceSelected(device)
                 }
             }
@@ -550,7 +573,9 @@ class NowPlayingFragment : Fragment() {
 
             val song = musicService?.getCurrentSong()
             if (song != null) {
-                fetchLyrics(song)
+                // If lyrics were partially loaded or in cache, this will show them instantly
+                // If network is still running, UI remains in "loading" state until job finishes
+                checkAndDisplayLyrics(song)
             }
         } else {
             lyricsContainer.visibility = View.GONE
@@ -574,22 +599,44 @@ class NowPlayingFragment : Fragment() {
         return cleaned.trim()
     }
 
+    // New helper to handle UI state based on Cache/Network status
+    private fun checkAndDisplayLyrics(song: Song) {
+        if (lyricsCache.containsKey(song.id)) {
+            // HIT: Load immediately from RAM
+            updateLyricsUI(song.id, lyricsCache[song.id])
+        } else {
+            // MISS: Ensure job is running (it should have started in onReceive), show loading
+            if (fetchLyricsJob?.isActive != true) {
+                // Rare edge case: Song changed but job died/didn't start
+                fetchLyrics(song)
+            }
+            showLyricsLoadingState()
+        }
+    }
+
+    // Refactored to separate Network Logic from UI Logic
     private fun fetchLyrics(song: Song) {
-        if (currentLyricsSongId == song.id && (currentLyricsList.isNotEmpty() || tvLyricsPlain.text.isNotEmpty())) {
+        // Cancel any pending request for previous songs to save bandwidth
+        fetchLyricsJob?.cancel()
+
+        // Reset local ID tracker
+        currentLyricsSongId = song.id
+
+        // If in cache, don't fetch again
+        if (lyricsCache.containsKey(song.id)) {
+            if (isLyricsVisible) updateLyricsUI(song.id, lyricsCache[song.id])
             return
         }
 
-        currentLyricsSongId = song.id
-        currentLyricsList = emptyList()
-        lyricsAdapter.submitList(emptyList())
-        tvLyricsPlain.text = ""
-
-        lyricsLoadingProgress.visibility = View.VISIBLE
-        lyricsRecyclerView.visibility = View.GONE
-        lyricsPlainScrollView.visibility = View.GONE
-
-        lifecycleScope.launch {
+        // Start Background Fetch
+        fetchLyricsJob = lifecycleScope.launch {
             try {
+                // Small delay to allow UI to settle if user is spamming "Next"
+                // This prevents making 10 requests if user skips 10 songs in 1 second
+                // but keeps it fast enough (300ms) to feel instant
+                // Remove this delay if you want ABSOLUTE raw speed at cost of data
+                // kotlinx.coroutines.delay(300)
+
                 val cleanTitle = cleanMetaData(song.title)
                 val cleanArtist = cleanMetaData(song.artist ?: "")
                 val cleanAlbum = cleanMetaData(song.album ?: "")
@@ -611,35 +658,57 @@ class NowPlayingFragment : Fragment() {
                     result
                 }
 
-                lyricsLoadingProgress.visibility = View.GONE
+                // Cache the result (even if null, so we don't retry failed songs repeatedly)
+                lyricsCache[song.id] = lyricResult
 
-                if (lyricResult != null) {
-                    if (!lyricResult.syncedLyrics.isNullOrEmpty()) {
-                        currentLyricsList = LyricsAdapter.parseLrc(lyricResult.syncedLyrics)
-                        lyricsAdapter.submitList(currentLyricsList)
-                        lyricsRecyclerView.visibility = View.VISIBLE
-                        lyricsPlainScrollView.visibility = View.GONE
-                    }
-                    else if (!lyricResult.plainLyrics.isNullOrEmpty()) {
-                        tvLyricsPlain.text = lyricResult.plainLyrics
-                        lyricsPlainScrollView.visibility = View.VISIBLE
-                        lyricsRecyclerView.visibility = View.GONE
-                    } else {
-                        showNoLyricsFound()
-                    }
-                } else {
-                    showNoLyricsFound()
+                // If the user is looking at the lyrics screen for THIS song, update UI
+                if (isLyricsVisible && currentLyricsSongId == song.id) {
+                    updateLyricsUI(song.id, lyricResult)
                 }
 
             } catch (e: Exception) {
                 Log.e("NowPlayingFragment", "Error fetching lyrics: ${e.message}")
-                lyricsLoadingProgress.visibility = View.GONE
-                showNoLyricsFound()
+                if (isLyricsVisible && currentLyricsSongId == song.id) {
+                    showNoLyricsFound()
+                }
             }
         }
     }
 
+    private fun showLyricsLoadingState() {
+        lyricsLoadingProgress.visibility = View.VISIBLE
+        lyricsRecyclerView.visibility = View.GONE
+        lyricsPlainScrollView.visibility = View.GONE
+        tvLyricsPlain.text = ""
+    }
+
+    private fun updateLyricsUI(songId: Long, lyricResult: LrcLibLyrics?) {
+        // Double check we are updating the right song
+        if (currentLyricsSongId != songId) return
+
+        lyricsLoadingProgress.visibility = View.GONE
+
+        if (lyricResult != null) {
+            if (!lyricResult.syncedLyrics.isNullOrEmpty()) {
+                currentLyricsList = LyricsAdapter.parseLrc(lyricResult.syncedLyrics)
+                lyricsAdapter.submitList(currentLyricsList)
+                lyricsRecyclerView.visibility = View.VISIBLE
+                lyricsPlainScrollView.visibility = View.GONE
+            }
+            else if (!lyricResult.plainLyrics.isNullOrEmpty()) {
+                tvLyricsPlain.text = lyricResult.plainLyrics
+                lyricsPlainScrollView.visibility = View.VISIBLE
+                lyricsRecyclerView.visibility = View.GONE
+            } else {
+                showNoLyricsFound()
+            }
+        } else {
+            showNoLyricsFound()
+        }
+    }
+
     private fun showNoLyricsFound() {
+        lyricsLoadingProgress.visibility = View.GONE
         tvLyricsPlain.text = "No lyrics found"
         lyricsPlainScrollView.visibility = View.VISIBLE
         lyricsRecyclerView.visibility = View.GONE
@@ -702,28 +771,33 @@ class NowPlayingFragment : Fragment() {
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                setMargins(0, dpToPx(8), 0, dpToPx(8))
+                setMargins(0, dpToPx(4), 0, dpToPx(4))
             }
         }
+
+        // Label: Fixed width (e.g., 100dp) so values align perfectly vertically
         val labelView = TextView(requireContext()).apply {
-            text = "$label:"
+            text = label
             setTextAppearance(android.R.style.TextAppearance_Small)
-            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setTextColor(ContextCompat.getColor(context, android.R.color.darker_gray))
             layoutParams = LinearLayout.LayoutParams(
-                0,
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                1f
+                dpToPx(100), // FIXED WIDTH prevents the huge gap
+                LinearLayout.LayoutParams.WRAP_CONTENT
             )
         }
+
+        // Value: Fills the remaining space
         val valueView = TextView(requireContext()).apply {
             text = value
             setTextAppearance(android.R.style.TextAppearance_Small)
+            setTypeface(typeface, android.graphics.Typeface.NORMAL)
             layoutParams = LinearLayout.LayoutParams(
                 0,
                 LinearLayout.LayoutParams.WRAP_CONTENT,
-                1f
+                1f // Takes up all remaining space
             )
         }
+
         layout.addView(labelView)
         layout.addView(valueView)
         container.addView(layout)
@@ -934,6 +1008,10 @@ class NowPlayingFragment : Fragment() {
 
         musicService?.getCurrentSong()?.let { song ->
             song.isFavorite = PreferenceManager.isFavorite(requireContext(), song.id)
+            // Ensure lyrics are being fetched or shown if we resume
+            if(isLyricsVisible) {
+                checkAndDisplayLyrics(song)
+            }
         }
 
         startSeekBarUpdates()
@@ -979,6 +1057,7 @@ class NowPlayingFragment : Fragment() {
             // Ignore if receiver was not registered
         }
         queueManager.clearCache()
+        fetchLyricsJob?.cancel() // Cancel network job
     }
 
     private fun dpToPx(dp: Int): Int {

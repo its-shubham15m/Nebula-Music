@@ -1,77 +1,99 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/bottom_sheet_song_details"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="@color/colorBackground"
-    android:padding="16dp">
+    android:background="@color/colorSurface">
 
-    <LinearLayout
+    <!-- Header Section -->
+    <RelativeLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:layout_marginBottom="16dp">
+        android:layout_marginTop="12dp"
+        android:paddingHorizontal="24dp"
+        android:paddingBottom="12dp">
 
         <TextView
-            android:layout_width="0dp"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Song Details"
-            android:textSize="20sp"
-            android:textStyle="bold" />
+            android:text="DETAILS"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.15"
+            android:layout_centerInParent="true"
+            android:textColor="?android:attr/textColorSecondary" />
 
         <ImageButton
             android:id="@+id/btn_close_sheet"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
             android:src="@drawable/ic_close"
-            android:contentDescription="Close"
-            android:background="@android:color/transparent" />
-    </LinearLayout>
+            app:tint="?attr/colorOnSurface"
+            android:layout_alignParentEnd="true"
+            android:layout_centerVertical="true"
+            android:contentDescription="Close" />
+    </RelativeLayout>
 
-    <LinearLayout
+    <!-- Scrollable Content -->
+    <ScrollView
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:layout_marginBottom="20dp">
-
-        <ImageView
-            android:id="@+id/sheet_album_art"
-            android:layout_width="80dp"
-            android:layout_height="80dp"
-            android:scaleType="centerCrop"
-            android:src="@drawable/default_album_art"
-            android:layout_marginEnd="16dp" />
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:scrollbars="vertical">
 
         <LinearLayout
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:orientation="vertical">
+            android:orientation="vertical"
+            android:gravity="center_horizontal"
+            android:paddingHorizontal="24dp">
 
+            <!-- Album Art Card (Square) -->
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="240dp"
+                android:layout_height="240dp"
+                app:cardCornerRadius="12dp"
+                app:cardElevation="8dp"
+                android:layout_marginTop="16dp"
+                android:layout_marginBottom="24dp">
+
+                <ImageView
+                    android:id="@+id/sheet_album_art"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:scaleType="centerCrop"
+                    android:src="@drawable/default_album_art" />
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Song Title & Artist -->
             <TextView
                 android:id="@+id/sheet_song_title"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Song Title"
-                android:textSize="18sp"
+                android:textSize="20sp"
                 android:textStyle="bold"
+                android:gravity="center"
+                android:textColor="?attr/colorOnSurface"
                 android:ellipsize="end"
-                android:maxLines="1" />
+                android:maxLines="2" />
 
             <TextView
                 android:id="@+id/sheet_song_artist"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Artist Name"
-                android:textSize="14sp"
+                android:textSize="16sp"
+                android:gravity="center"
                 android:textColor="?android:attr/textColorSecondary"
+                android:layout_marginTop="4dp"
                 android:ellipsize="end"
-                android:maxLines="1"
-                android:layout_marginTop="4dp" />
+                android:maxLines="1" />
 
             <TextView
                 android:id="@+id/sheet_song_album"
@@ -79,82 +101,79 @@
                 android:layout_height="wrap_content"
                 android:text="Album Name"
                 android:textSize="14sp"
+                android:gravity="center"
+                android:alpha="0.7"
                 android:textColor="?android:attr/textColorSecondary"
+                android:layout_marginTop="2dp"
                 android:ellipsize="end"
-                android:maxLines="1"
-                android:layout_marginTop="2dp" />
-        </LinearLayout>
-    </LinearLayout>
+                android:maxLines="1" />
 
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Metadata"
-        android:textSize="16sp"
-        android:textStyle="bold"
-        android:layout_marginBottom="12dp" />
-
-    <ScrollView
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1">
-
-        <LinearLayout
-            android:id="@+id/sheet_metadata_container"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical">
-
+            <!-- Action Buttons -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
-                android:layout_marginBottom="8dp">
+                android:gravity="center"
+                android:layout_marginTop="24dp"
+                android:layout_marginBottom="32dp">
 
-                <TextView
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_share_song"
+                    style="@style/Widget.Material3.Button.TonalButton"
                     android:layout_width="0dp"
-                    android:layout_height="wrap_content"
+                    android:layout_height="50dp"
                     android:layout_weight="1"
-                    android:text="Title:"
-                    android:textStyle="bold"
-                    android:textSize="14sp" />
+                    android:text="Share"
+                    android:layout_marginEnd="8dp"
+                    app:icon="@drawable/ic_share"
+                    app:iconGravity="textStart" />
 
-                <TextView
-                    android:id="@+id/sheet_metadata_title"
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_add_to_playlist"
+                    style="@style/Widget.Material3.Button.TonalButton"
                     android:layout_width="0dp"
-                    android:layout_height="wrap_content"
+                    android:layout_height="50dp"
                     android:layout_weight="1"
-                    android:text="Loading..."
-                    android:textSize="14sp" />
+                    android:text="Playlist"
+                    android:layout_marginStart="8dp"
+                    app:icon="@drawable/ic_playlist"
+                    app:iconGravity="textStart" />
             </LinearLayout>
+
+            <!-- Metadata Section Header -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="FILE INFORMATION"
+                android:textSize="11sp"
+                android:letterSpacing="0.1"
+                android:textStyle="bold"
+                android:textColor="?android:attr/textColorSecondary"
+                android:alpha="0.7"
+                android:layout_marginBottom="12dp" />
+
+            <!-- Divider -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="?android:attr/listDivider"
+                android:alpha="0.1"
+                android:layout_marginBottom="12dp"/>
+
+            <!-- Metadata Rows Container -->
+            <LinearLayout
+                android:id="@+id/sheet_metadata_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+                <!-- Rows will be injected here by Kotlin -->
+            </LinearLayout>
+
+            <!-- Bottom Spacer -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="30dp"/>
 
         </LinearLayout>
     </ScrollView>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:layout_marginTop="16dp">
-
-        <Button
-            android:id="@+id/btn_share_song"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Share"
-            android:textColor="@color/white"
-            android:textSize="16dp"
-            android:layout_marginEnd="8dp" />
-
-        <Button
-            android:id="@+id/btn_add_to_playlist"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Add to Playlist"
-            android:textColor="@color/white"
-            android:textSize="16dp"
-            android:layout_marginStart="8dp" />
-    </LinearLayout>
 </LinearLayout>
