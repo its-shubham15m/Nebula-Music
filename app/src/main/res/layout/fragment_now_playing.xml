@@ -59,6 +59,17 @@
             android:layout_height="0dp"
             android:layout_weight="1" />
 
+        <!-- NEW: Audio Output Button -->
+        <ImageButton
+            android:id="@+id/btn_audio_output"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_speaker"
+            android:padding="12dp"
+            app:tint="@color/white"
+            android:contentDescription="Audio Output" />
+
         <ImageButton
             android:id="@+id/btn_share"
             android:layout_width="48dp"
@@ -78,7 +89,7 @@
             android:padding="12dp"
             app:tint="@color/white"
             android:contentDescription="Song Details"
-            android:layout_marginStart="8dp" />
+ />
     </LinearLayout>
 
     <androidx.constraintlayout.widget.ConstraintLayout

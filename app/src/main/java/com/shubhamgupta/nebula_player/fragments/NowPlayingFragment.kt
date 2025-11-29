@@ -5,8 +5,11 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.graphics.Color
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.GradientDrawable
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
 import android.media.MediaMetadataRetriever
 import android.os.Build
 import android.os.Bundle
@@ -24,9 +27,11 @@ import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
+import android.widget.RadioButton
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.ColorUtils
@@ -47,6 +52,7 @@ import com.bumptech.glide.request.RequestListener
 import com.bumptech.glide.request.target.Target
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
+import com.google.android.material.button.MaterialButton
 import com.shubhamgupta.nebula_player.MainActivity
 import com.shubhamgupta.nebula_player.R
 import com.shubhamgupta.nebula_player.adapters.LyricLine
@@ -69,6 +75,7 @@ class NowPlayingFragment : Fragment() {
     private val handler = Handler(Looper.getMainLooper())
     private var isSeeking = false
     private lateinit var bottomSheetDialog: BottomSheetDialog
+    private var audioOutputDialog: BottomSheetDialog? = null
     private var isFragmentVisible = false
 
     private var isSharing = false
@@ -85,6 +92,7 @@ class NowPlayingFragment : Fragment() {
     private lateinit var btnShare: ImageButton
     private lateinit var btnDetails: ImageButton
     private lateinit var btnQueue: ImageButton
+    private lateinit var btnAudioOutput: ImageButton
     private lateinit var ivFavorite: ImageView
     private lateinit var ivAlbumArt: ImageView
 
@@ -261,6 +269,7 @@ class NowPlayingFragment : Fragment() {
         btnShare = view.findViewById(R.id.btn_share)
         btnDetails = view.findViewById(R.id.btn_details)
         btnQueue = view.findViewById(R.id.btn_queue)
+        btnAudioOutput = view.findViewById(R.id.btn_audio_output) // NEW
         ivFavorite = view.findViewById(R.id.iv_fav)
         ivAlbumArt = view.findViewById(R.id.album_art)
 
@@ -391,12 +400,133 @@ class NowPlayingFragment : Fragment() {
         btnQueue.setOnClickListener { queueManager.showQueueDialog() }
         ivFavorite.setOnClickListener { toggleFavorite() }
 
+        // Audio Output Click
+        btnAudioOutput.setOnClickListener { showAudioOutputDialog() }
+
         ivAlbumArt.setOnClickListener { toggleLyricsVisibility() }
         lyricsContainer.setOnClickListener { toggleLyricsVisibility() }
 
         lyricsRecyclerView.setOnClickListener { toggleLyricsVisibility() }
         lyricsPlainScrollView.setOnClickListener { toggleLyricsVisibility() }
         tvLyricsPlain.setOnClickListener { toggleLyricsVisibility() }
+    }
+
+    private fun showAudioOutputDialog() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val audioManager = requireContext().getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            val devices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+
+            // Filter devices to show relevant ones (avoid duplicate internals sometimes)
+            val filteredDevices = devices.distinctBy { it.id }
+
+            if (filteredDevices.isEmpty()) {
+                Toast.makeText(requireContext(), "No output devices found", Toast.LENGTH_SHORT).show()
+                return
+            }
+
+            // Inflate Custom Layout
+            val dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_audio_output, null)
+            val recyclerView = dialogView.findViewById<RecyclerView>(R.id.recycler_audio_devices)
+            val btnClose = dialogView.findViewById<MaterialButton>(R.id.btn_close_audio_output)
+
+            // Setup RecyclerView
+            recyclerView.layoutManager = LinearLayoutManager(requireContext())
+
+            // Get currently active device logic
+            val currentDeviceId = musicService?.getPreferredAudioDevice() ?: -1
+
+            val adapter = AudioDeviceAdapter(filteredDevices, currentDeviceId) { selectedDevice ->
+                val success = musicService?.setPreferredAudioDevice(selectedDevice.id) == true
+                if (success) {
+                    Toast.makeText(requireContext(), "Switched to ${selectedDevice.productName}", Toast.LENGTH_SHORT).show()
+                    audioOutputDialog?.dismiss()
+                } else {
+                    Toast.makeText(requireContext(), "Could not switch device", Toast.LENGTH_SHORT).show()
+                }
+            }
+            recyclerView.adapter = adapter
+
+            audioOutputDialog = BottomSheetDialog(requireContext())
+            audioOutputDialog?.setContentView(dialogView)
+
+            btnClose.setOnClickListener {
+                audioOutputDialog?.dismiss()
+            }
+
+            audioOutputDialog?.show()
+
+        } else {
+            Toast.makeText(requireContext(), "Audio switching requires Android M+", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // Inner Adapter Class for Audio Devices
+    inner class AudioDeviceAdapter(
+        private val devices: List<AudioDeviceInfo>,
+        private val currentDeviceId: Int,
+        private val onDeviceSelected: (AudioDeviceInfo) -> Unit
+    ) : RecyclerView.Adapter<AudioDeviceAdapter.DeviceViewHolder>() {
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): DeviceViewHolder {
+            val view = LayoutInflater.from(parent.context).inflate(R.layout.item_audio_device, parent, false)
+            return DeviceViewHolder(view)
+        }
+
+        override fun onBindViewHolder(holder: DeviceViewHolder, position: Int) {
+            val device = devices[position]
+            holder.bind(device, device.id == currentDeviceId)
+        }
+
+        override fun getItemCount(): Int = devices.size
+
+        inner class DeviceViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+            private val ivIcon: ImageView = itemView.findViewById(R.id.iv_device_icon)
+            private val tvName: TextView = itemView.findViewById(R.id.tv_device_name)
+            private val tvType: TextView = itemView.findViewById(R.id.tv_device_type)
+            private val rbSelected: RadioButton = itemView.findViewById(R.id.rb_device_selected)
+
+            fun bind(device: AudioDeviceInfo, isSelected: Boolean) {
+                // Name logic
+                val name = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    device.productName.toString()
+                } else {
+                    getDeviceTypeName(device.type)
+                }
+                tvName.text = name
+                tvType.text = getDeviceTypeName(device.type)
+
+                // Icon logic
+                val iconRes = when(device.type) {
+                    AudioDeviceInfo.TYPE_BLUETOOTH_A2DP, AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> R.drawable.ic_bluetooth
+                    AudioDeviceInfo.TYPE_WIRED_HEADSET, AudioDeviceInfo.TYPE_WIRED_HEADPHONES -> R.drawable.ic_headset
+                    else -> R.drawable.ic_speaker
+                }
+                ivIcon.setImageResource(iconRes)
+
+                rbSelected.isChecked = isSelected
+
+                itemView.setOnClickListener {
+                    onDeviceSelected(device)
+                }
+                rbSelected.setOnClickListener {
+                    onDeviceSelected(device)
+                }
+            }
+        }
+    }
+
+    private fun getDeviceTypeName(type: Int): String {
+        return when (type) {
+            AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> "Phone Speaker"
+            AudioDeviceInfo.TYPE_WIRED_HEADSET -> "Wired Headset"
+            AudioDeviceInfo.TYPE_WIRED_HEADPHONES -> "Wired Headphones"
+            AudioDeviceInfo.TYPE_BLUETOOTH_A2DP -> "Bluetooth Audio"
+            AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> "Bluetooth Headset"
+            AudioDeviceInfo.TYPE_USB_DEVICE -> "USB Audio"
+            AudioDeviceInfo.TYPE_USB_HEADSET -> "USB Headset"
+            AudioDeviceInfo.TYPE_AUX_LINE -> "AUX Cable"
+            else -> "Audio Device"
+        }
     }
 
     private fun toggleLyricsVisibility() {
