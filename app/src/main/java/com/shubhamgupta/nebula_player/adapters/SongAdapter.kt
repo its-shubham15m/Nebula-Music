@@ -14,6 +14,9 @@ import android.widget.SectionIndexer
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.widget.PopupMenu
+import androidx.core.graphics.toColorInt
+import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.shubhamgupta.nebula_player.R
@@ -21,35 +24,43 @@ import com.shubhamgupta.nebula_player.models.Playlist
 import com.shubhamgupta.nebula_player.models.Song
 import com.shubhamgupta.nebula_player.utils.PreferenceManager
 import com.shubhamgupta.nebula_player.utils.SongUtils
-import java.io.File
 import java.util.UUID
-import androidx.core.graphics.toColorInt
 
+/**
+ * Updated to use ListAdapter + DiffUtil for buttery smooth animations.
+ * No more full refreshes or jitter.
+ */
 class SongAdapter(
     private val context: Context,
-    private val songs: MutableList<Song>,
     private val onItemClick: (position: Int) -> Unit,
     private val onDataChanged: () -> Unit,
     private val onDeleteRequest: (song: Song) -> Unit
-) : RecyclerView.Adapter<SongAdapter.SongVH>(), SectionIndexer {
+) : ListAdapter<Song, SongAdapter.SongVH>(SongDiffCallback()), SectionIndexer {
 
     private var sections: SparseArray<Int> = SparseArray()
     private var sectionLetters: MutableList<String> = mutableListOf()
 
     init {
-        setupSections()
+        // Initialize sections with empty list
+        setupSections(emptyList())
     }
 
-    private fun setupSections() {
+    // Called automatically by ListAdapter when the list changes
+    override fun onCurrentListChanged(previousList: MutableList<Song>, currentList: MutableList<Song>) {
+        super.onCurrentListChanged(previousList, currentList)
+        setupSections(currentList)
+    }
+
+    private fun setupSections(songs: List<Song>) {
         sections.clear()
         sectionLetters.clear()
 
         if (songs.isNotEmpty()) {
             var sectionStart = 0
-            var currentSection = songs[0].title[0].uppercaseChar()
+            var currentSection = songs[0].title.firstOrNull()?.uppercaseChar() ?: '#'
 
             for (i in songs.indices) {
-                val firstChar = songs[i].title[0].uppercaseChar()
+                val firstChar = songs[i].title.firstOrNull()?.uppercaseChar() ?: '#'
                 if (firstChar != currentSection) {
                     sections.put(currentSection.code, sectionStart)
                     sectionLetters.add(currentSection.toString())
@@ -67,7 +78,7 @@ class SongAdapter(
     }
 
     override fun getPositionForSection(sectionIndex: Int): Int {
-        return if (sectionIndex < sectionLetters.size) {
+        return if (sectionIndex < sectionLetters.size && sectionIndex >= 0) {
             val sectionChar = sectionLetters[sectionIndex][0]
             sections.get(sectionChar.code, 0)
         } else {
@@ -92,7 +103,7 @@ class SongAdapter(
     }
 
     override fun onBindViewHolder(holder: SongVH, position: Int) {
-        val song = songs[position]
+        val song = getItem(position)
         holder.title.text = song.title
         holder.artist.text = song.artist ?: "Unknown"
 
@@ -110,14 +121,12 @@ class SongAdapter(
         }
     }
 
-    override fun getItemCount(): Int = songs.size
+    // NOTE: This helper is needed because ListAdapter's currentList is immutable
+    fun getSongAt(position: Int): Song = getItem(position)
 
     private fun showPopupMenu(view: View, position: Int) {
-        if (position < 0 || position >= songs.size) {
-            Log.e("SongAdapter", "Invalid position for popup menu: $position")
-            return
-        }
-        val song = songs[position]
+        if (position < 0 || position >= itemCount) return
+        val song = getItem(position)
         val isFavorite = PreferenceManager.isFavorite(context, song.id)
 
         val popup = PopupMenu(view.context, view)
@@ -137,10 +146,6 @@ class SongAdapter(
         }
 
         popup.setOnMenuItemClickListener { item ->
-            if (position < 0 || position >= songs.size) {
-                Log.e("SongAdapter", "Position $position became invalid during menu click.")
-                return@setOnMenuItemClickListener true
-            }
             when (item.itemId) {
                 R.id.menu_play -> onItemClick(position)
                 R.id.menu_add_to_queue -> addToQueue(song)
@@ -151,7 +156,7 @@ class SongAdapter(
             }
             true
         }
-
+        // Force icons (hack)
         try {
             val fieldMPopup = PopupMenu::class.java.getDeclaredField("mPopup")
             fieldMPopup.isAccessible = true
@@ -273,5 +278,16 @@ class SongAdapter(
         val title: TextView = view.findViewById(R.id.item_title)
         val artist: TextView = view.findViewById(R.id.item_artist)
         val options: ImageView = view.findViewById(R.id.item_options)
+    }
+
+    class SongDiffCallback : DiffUtil.ItemCallback<Song>() {
+        override fun areItemsTheSame(oldItem: Song, newItem: Song): Boolean {
+            return oldItem.id == newItem.id
+        }
+
+        override fun areContentsTheSame(oldItem: Song, newItem: Song): Boolean {
+            // Assumes Song is a data class.
+            return oldItem == newItem
+        }
     }
 }

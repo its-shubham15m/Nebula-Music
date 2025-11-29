@@ -1,6 +1,5 @@
 package com.shubhamgupta.nebula_player.fragments
 
-import android.app.AlertDialog
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -12,8 +11,8 @@ import androidx.appcompat.widget.SwitchCompat
 import androidx.fragment.app.Fragment
 import com.shubhamgupta.nebula_player.MainActivity
 import com.shubhamgupta.nebula_player.R
+import com.shubhamgupta.nebula_player.repository.SongRepository
 import com.shubhamgupta.nebula_player.utils.PreferenceManager
-import com.shubhamgupta.nebula_player.utils.SongCacheManager
 
 class SettingsFragment : Fragment() {
 
@@ -22,7 +21,6 @@ class SettingsFragment : Fragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
-        // Note: You'll need to create fragment_settings.xml (provided below)
         return inflater.inflate(R.layout.fragment_settings, container, false)
     }
 
@@ -44,9 +42,7 @@ class SettingsFragment : Fragment() {
     }
 
     private fun setupGeneralSettings(view: View) {
-        // Theme settings are handled via the dialog in MainActivity usually,
-        // but we can trigger it here too if needed.
-        // For now, we'll focus on the specific functional settings.
+        // Theme settings placeholder
     }
 
     private fun setupAudioSettings(view: View) {
@@ -84,7 +80,8 @@ class SettingsFragment : Fragment() {
         // Scan Media
         view.findViewById<LinearLayout>(R.id.setting_scan_media)?.setOnClickListener {
             Toast.makeText(requireContext(), "Scanning media...", Toast.LENGTH_SHORT).show()
-            SongCacheManager.refreshCache(requireContext())
+            // Triggers the repository refresh logic
+            SongRepository.refreshSongs(requireContext())
         }
     }
 

@@ -69,6 +69,8 @@ class VideoPageFragment : Fragment() {
 
     private lateinit var deleteResultLauncher: ActivityResultLauncher<IntentSenderRequest>
 
+    private lateinit var videoAdapter: VideoAdapter
+
     private val refreshRunnable = object : Runnable {
         override fun run() {
             refreshDataPreserveState()
@@ -145,12 +147,44 @@ class VideoPageFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         initializeViews(view)
+
+        // FIXED: Initialize adapter BEFORE loading videos (so loadVideos can update it)
+        setupAdapter()
         loadVideos()
     }
 
     private fun initializeViews(view: View) {
         view.findViewById<ImageButton>(R.id.btn_sort).setOnClickListener {
             showSortDialog()
+        }
+    }
+
+    // FIXED: Setup Adapter without passing the data list
+    @OptIn(UnstableApi::class)
+    private fun setupAdapter() {
+        videoAdapter = VideoAdapter(
+            requireContext(),
+            onItemClick = { item -> handleItemClick(item) },
+            onDeleteRequest = { video -> requestDeleteVideo(video) }
+        )
+        recyclerView.adapter = videoAdapter
+    }
+
+    @OptIn(UnstableApi::class)
+    private fun handleItemClick(item: VideoUiModel) {
+        when (item) {
+            is VideoUiModel.VideoItem -> {
+                // Play Video
+                val intent = Intent(requireContext(), VideoPlayerActivity::class.java).apply {
+                    putExtra("VIDEO_ID", item.video.id)
+                    putExtra("VIDEO_TITLE", item.video.title)
+                }
+                startActivity(intent)
+            }
+            is VideoUiModel.FolderItem -> {
+                // Enter Folder
+                enterFolder(item.name)
+            }
         }
     }
 
@@ -303,32 +337,11 @@ class VideoPageFragment : Fragment() {
         }
     }
 
-    @OptIn(UnstableApi::class)
     private fun updateAdapter() {
-        if (!isAdded) return
+        if (!isAdded || !::videoAdapter.isInitialized) return
 
-        val adapter = VideoAdapter(
-            requireContext(),
-            currentUiList,
-            onItemClick = { item ->
-                when (item) {
-                    is VideoUiModel.VideoItem -> {
-                        // Play Video
-                        val intent = Intent(requireContext(), VideoPlayerActivity::class.java).apply {
-                            putExtra("VIDEO_ID", item.video.id)
-                            putExtra("VIDEO_TITLE", item.video.title)
-                        }
-                        startActivity(intent)
-                    }
-                    is VideoUiModel.FolderItem -> {
-                        // Enter Folder
-                        enterFolder(item.name)
-                    }
-                }
-            },
-            onDeleteRequest = { video -> requestDeleteVideo(video) }
-        )
-        recyclerView.adapter = adapter
+        // FIXED: Submit the list here instead of creating new adapter
+        videoAdapter.submitList(ArrayList(currentUiList))
 
         emptyView.visibility = if (currentUiList.isEmpty()) View.VISIBLE else View.GONE
         recyclerView.visibility = if (currentUiList.isEmpty()) View.GONE else View.VISIBLE

@@ -1,7 +1,6 @@
 package com.shubhamgupta.nebula_player.fragments
 
 import android.app.AlertDialog
-import android.graphics.Typeface
 import android.os.Bundle
 import android.util.Log
 import android.view.*
@@ -38,7 +37,6 @@ class PlaylistsFragment : Fragment() {
     ): View? {
         val view = inflater.inflate(R.layout.fragment_playlists, container, false)
         initializeViews(view)
-        loadPlaylists()
         return view
     }
 
@@ -48,6 +46,8 @@ class PlaylistsFragment : Fragment() {
         val bottomPadding = (140 * resources.displayMetrics.density).toInt()
         recyclerView.clipToPadding = false
         recyclerView.setPadding(0, 0, 0, bottomPadding)
+
+        loadPlaylists()
     }
 
     override fun onResume() {
@@ -91,11 +91,18 @@ class PlaylistsFragment : Fragment() {
         } catch (e: Exception) {
             e.printStackTrace()
         }
+
+        setupRecyclerView()
     }
 
     private fun loadPlaylists() {
         playlists.clear()
         playlists.addAll(PreferenceManager.getPlaylists(requireContext()).sortedByDescending { it.createdAt })
+
+        // Submit to ListAdapter
+        if (::adapter.isInitialized) {
+            adapter.submitList(ArrayList(playlists))
+        }
 
         if (playlists.isEmpty()) {
             recyclerView.visibility = View.GONE
@@ -106,13 +113,13 @@ class PlaylistsFragment : Fragment() {
             tvEmpty.visibility = View.GONE
             view?.findViewById<com.google.android.material.card.MaterialCardView>(R.id.shuffle_all_card)?.visibility = View.VISIBLE
         }
-
-        setupRecyclerView()
     }
 
     private fun setupRecyclerView() {
         recyclerView.layoutManager = GridLayoutManager(context, 2)
-        adapter = PlaylistAdapter(playlists,
+
+        // FIXED: Constructor call updated to match ListAdapter (no list passed here)
+        adapter = PlaylistAdapter(
             onItemClick = { position ->
                 openPlaylistSongs(position)
             },
@@ -127,7 +134,10 @@ class PlaylistsFragment : Fragment() {
     }
 
     private fun openPlaylistSongs(position: Int) {
-        val playlist = playlists[position]
+        // Use currentList from adapter to ensure sync
+        if (position < 0 || position >= adapter.currentList.size) return
+        val playlist = adapter.currentList[position]
+
         val fragment = PlaylistSongsFragment.newInstance(playlist)
 
         // Check if we are inside HomePageFragment
@@ -209,11 +219,15 @@ class PlaylistsFragment : Fragment() {
                             createdAt = System.currentTimeMillis(),
                             songIds = mutableListOf()
                         )
+                        // Add to local list and save
                         playlists.add(newPlaylist)
                         PreferenceManager.savePlaylists(requireContext(), playlists)
                         loadPlaylists()
                         showToast("Playlist '$name' created")
                         dialog.dismiss()
+
+                        // Find new position to open add songs dialog
+                        // Note: Because we sort by Descending ID/Time, it should be at top usually
                         val newPosition = playlists.indexOfFirst { it.id == newPlaylist.id }
                         if (newPosition != -1) {
                             showAddSongsToPlaylistDialog(newPosition, true)
@@ -233,7 +247,9 @@ class PlaylistsFragment : Fragment() {
     }
 
     private fun renamePlaylist(position: Int) {
-        val playlist = playlists[position]
+        if (position < 0 || position >= adapter.currentList.size) return
+        val playlist = adapter.currentList[position]
+
         val dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_create_playlist, null)
         val input = dialogView.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.et_playlist_name)
         input.setText(playlist.name)
@@ -273,12 +289,14 @@ class PlaylistsFragment : Fragment() {
     }
 
     private fun deletePlaylist(position: Int) {
-        val playlist = playlists[position]
+        if (position < 0 || position >= adapter.currentList.size) return
+        val playlist = adapter.currentList[position]
+
         val dialog = AlertDialog.Builder(requireContext(), R.style.AlertDialogTheme)
             .setTitle("Delete Playlist")
             .setMessage("Are you sure you want to delete '${playlist.name}'?")
             .setPositiveButton("DELETE") { dialog, _ ->
-                playlists.removeAt(position)
+                playlists.remove(playlist)
                 PreferenceManager.savePlaylists(requireContext(), playlists)
                 loadPlaylists()
                 showToast("Playlist deleted")
@@ -296,7 +314,7 @@ class PlaylistsFragment : Fragment() {
     }
 
     private fun applyDialogThemeFix(dialog: AlertDialog) {
-        val titleTextView = dialog.findViewById<TextView>(android.R.id.title)
+        val titleTextView = dialog.findViewById<TextView>(androidx.appcompat.R.id.alertTitle)
         val messageTextView = dialog.findViewById<TextView>(android.R.id.message)
         titleTextView?.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_primary))
         messageTextView?.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_secondary))
@@ -309,9 +327,13 @@ class PlaylistsFragment : Fragment() {
     }
 
     private fun showAddSongsToPlaylistDialog(position: Int, isNewPlaylist: Boolean = false) {
-        val playlist = playlists[position]
+        // Use lookup by ID if possible, otherwise position from current list
+        val targetPlaylist = if (position < adapter.currentList.size) adapter.currentList[position] else playlists.lastOrNull()
+
+        if (targetPlaylist == null) return
+
         val allSongs = SongRepository.getAllSongs(requireContext())
-        val currentPlaylistSongIds = playlist.songIds.toSet()
+        val currentPlaylistSongIds = targetPlaylist.songIds.toSet()
 
         val dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_add_songs, null)
         val recyclerView = dialogView.findViewById<RecyclerView>(R.id.songs_recycler_view)
@@ -323,7 +345,7 @@ class PlaylistsFragment : Fragment() {
         val submitButton = dialogView.findViewById<Button>(R.id.btn_submit)
         val cancelButton = dialogView.findViewById<Button>(R.id.btn_cancel)
 
-        tvTitle.text = "Add songs to '${playlist.name}'"
+        tvTitle.text = "Add songs to '${targetPlaylist.name}'"
         totalSongs.text = "Total songs: ${allSongs.size}"
 
         lateinit var songAdapter: SongSelectionAdapter
@@ -331,7 +353,7 @@ class PlaylistsFragment : Fragment() {
         songAdapter = SongSelectionAdapter(
             songs = allSongs,
             selectedSongIds = currentPlaylistSongIds,
-            onSongSelected = { songId, isSelected ->
+            onSongSelected = { _, _ ->
                 updateSelectedCount(songAdapter, selectedCount)
             }
         )
@@ -364,12 +386,10 @@ class PlaylistsFragment : Fragment() {
         submitButton.setOnClickListener {
             val selectedSongs = songAdapter.getSelectedSongs()
             if (selectedSongs.isNotEmpty()) {
-                addSongsToPlaylist(position, selectedSongs)
-                showToast("Added ${selectedSongs.size} songs to '${playlist.name}'")
+                addSongsToPlaylist(targetPlaylist, selectedSongs)
+                showToast("Added ${selectedSongs.size} songs to '${targetPlaylist.name}'")
                 dialog.dismiss()
-                if (!isNewPlaylist) {
-                    showAddSongsToPlaylistDialog(position, false)
-                }
+                // Do not recursively call showAddSongs unless intended logic (removed to be safe)
             } else {
                 showToast("Please select at least one song")
             }
@@ -377,8 +397,8 @@ class PlaylistsFragment : Fragment() {
 
         cancelButton.setOnClickListener {
             dialog.dismiss()
-            if (isNewPlaylist && playlist.songIds.isEmpty()) {
-                playlists.remove(playlist)
+            if (isNewPlaylist && targetPlaylist.songIds.isEmpty()) {
+                playlists.remove(targetPlaylist)
                 PreferenceManager.savePlaylists(requireContext(), playlists)
                 loadPlaylists()
                 showToast("Empty playlist deleted")
@@ -394,19 +414,26 @@ class PlaylistsFragment : Fragment() {
         textView.text = "$selectedCount songs selected"
     }
 
-    private fun addSongsToPlaylist(position: Int, songIds: List<Long>) {
-        val playlist = playlists[position]
+    private fun addSongsToPlaylist(playlist: Playlist, songIds: List<Long>) {
         val updatedSongIds = playlist.songIds.toMutableList()
         val newSongs = songIds.filter { it !in updatedSongIds }
         updatedSongIds.addAll(newSongs)
         playlist.songIds.clear()
         playlist.songIds.addAll(updatedSongIds)
-        PreferenceManager.savePlaylists(requireContext(), playlists)
-        loadPlaylists()
+
+        // Find playlist in master list and update it
+        val index = playlists.indexOfFirst { it.id == playlist.id }
+        if (index != -1) {
+            playlists[index] = playlist
+            PreferenceManager.savePlaylists(requireContext(), playlists)
+            loadPlaylists()
+        }
     }
 
     private fun playPlaylist(position: Int) {
-        val playlist = playlists[position]
+        if (position < 0 || position >= adapter.currentList.size) return
+        val playlist = adapter.currentList[position]
+
         val playlistSongs = getPlaylistSongs(playlist)
         if (playlistSongs.isNotEmpty()) {
             musicService?.startPlayback(ArrayList(playlistSongs), 0)

@@ -346,6 +346,7 @@ class MusicPageFragment : Fragment() {
         val fragment = getCurrentActiveFragment()
         try {
             when (fragment) {
+                // FIXED: All fragments have refreshData() now
                 is SongsFragment -> if (fragment.isAdded) fragment.refreshData()
                 is ArtistsFragment -> if (fragment.isAdded) fragment.refreshData()
                 is AlbumsFragment -> if (fragment.isAdded) fragment.refreshData()
@@ -355,15 +356,9 @@ class MusicPageFragment : Fragment() {
     }
 
     private fun refreshCurrentFragmentPreserveState() {
-        val fragment = getCurrentActiveFragment()
-        try {
-            when (fragment) {
-                is SongsFragment -> if (fragment.isAdded) fragment.refreshDataPreserveState()
-                is ArtistsFragment -> if (fragment.isAdded) fragment.refreshDataPreserveState()
-                is AlbumsFragment -> if (fragment.isAdded) fragment.refreshDataPreserveState()
-                is GenresFragment -> if (fragment.isAdded) fragment.refreshDataPreserveState()
-            }
-        } catch (e: Exception) { Log.e("MusicPageFragment", "Error refreshing fragment with state preservation: ${e.message}") }
+        // FIXED: We just call the normal refresh.
+        // With ListAdapter architecture, state is preserved automatically via DiffUtil.
+        refreshCurrentFragment()
     }
 
     companion object {

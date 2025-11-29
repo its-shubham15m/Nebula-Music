@@ -4,14 +4,15 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
+import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.shubhamgupta.nebula_player.R
 import com.shubhamgupta.nebula_player.models.Artist
 
 class ArtistAdapter(
-    private val artists: List<Artist>,
     private val onArtistClick: (position: Int) -> Unit
-) : RecyclerView.Adapter<ArtistAdapter.ArtistVH>() {
+) : ListAdapter<Artist, ArtistAdapter.ArtistVH>(ArtistDiffCallback()) {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ArtistVH {
         val view = LayoutInflater.from(parent.context)
@@ -20,7 +21,7 @@ class ArtistAdapter(
     }
 
     override fun onBindViewHolder(holder: ArtistVH, position: Int) {
-        val artist = artists[position]
+        val artist = getItem(position)
         holder.artistName.text = artist.name
         holder.songCount.text = "${artist.songCount} songs"
 
@@ -29,10 +30,21 @@ class ArtistAdapter(
         }
     }
 
-    override fun getItemCount(): Int = artists.size
+    // Helper to get item at position safely
+    fun getArtistAt(position: Int): Artist = getItem(position)
 
     class ArtistVH(view: View) : RecyclerView.ViewHolder(view) {
         val artistName: TextView = view.findViewById(R.id.artist_name)
         val songCount: TextView = view.findViewById(R.id.artist_song_count)
+    }
+
+    class ArtistDiffCallback : DiffUtil.ItemCallback<Artist>() {
+        override fun areItemsTheSame(oldItem: Artist, newItem: Artist): Boolean {
+            return oldItem.name == newItem.name
+        }
+
+        override fun areContentsTheSame(oldItem: Artist, newItem: Artist): Boolean {
+            return oldItem == newItem
+        }
     }
 }

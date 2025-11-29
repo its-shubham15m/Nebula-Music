@@ -173,11 +173,13 @@ class AlbumSongsFragment : Fragment() {
 
             val adapter = SongAdapter(
                 context = requireContext(),
-                songs = albumSongsList,
+                // FIXED: Removed 'songs' parameter
                 onItemClick = { pos -> openNowPlaying(pos) },
                 onDataChanged = { refreshData() },
                 onDeleteRequest = { song -> requestDeleteSong(song) }
             )
+            // FIXED: Submit list separately
+            adapter.submitList(ArrayList(albumSongsList))
             recyclerView.adapter = adapter
         }
     }

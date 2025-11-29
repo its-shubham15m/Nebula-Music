@@ -13,6 +13,7 @@ import android.support.v4.media.session.PlaybackStateCompat
 import android.util.Log
 import com.shubhamgupta.nebula_player.R
 import com.shubhamgupta.nebula_player.models.Song
+import com.shubhamgupta.nebula_player.repository.SongRepository
 import com.shubhamgupta.nebula_player.utils.EqualizerManager
 import com.shubhamgupta.nebula_player.utils.PreferenceManager
 import com.shubhamgupta.nebula_player.utils.SongCacheManager
@@ -180,8 +181,10 @@ class MusicService : Service(), MediaPlayer.OnCompletionListener, MediaPlayer.On
         val cacheUpdateHandler = Handler(Looper.getMainLooper())
         val cacheUpdateRunnable = object : Runnable {
             override fun run() {
+                // FIXED: shouldUpdateCache is back in SongCacheManager
                 if (SongCacheManager.shouldUpdateCache()) {
-                    SongCacheManager.refreshCache(applicationContext)
+                    // FIXED: Use Repository for refreshing
+                    SongRepository.refreshSongs(applicationContext)
                 }
                 cacheUpdateHandler.postDelayed(this, 60000)
             }

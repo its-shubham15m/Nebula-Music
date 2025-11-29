@@ -15,35 +15,34 @@ import android.view.ViewGroup
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.shubhamgupta.nebula_player.MainActivity
 import com.shubhamgupta.nebula_player.R
 import com.shubhamgupta.nebula_player.adapters.ArtistAdapter
 import com.shubhamgupta.nebula_player.models.Artist
+import com.shubhamgupta.nebula_player.models.Song
 import com.shubhamgupta.nebula_player.repository.SongRepository
 import com.shubhamgupta.nebula_player.utils.PreferenceManager
-// Explicit import
-import com.shubhamgupta.nebula_player.fragments.ArtistSongsFragment
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class ArtistsFragment : Fragment() {
 
     private lateinit var recyclerView: RecyclerView
     private lateinit var emptyView: TextView
     private lateinit var loadingProgress: ProgressBar
-    private val artistList = mutableListOf<Artist>()
-    private var filteredArtistList = mutableListOf<Artist>()
+
+    private lateinit var artistAdapter: ArtistAdapter
+
+    private var allArtists = listOf<Artist>()
     private var currentSortType = MainActivity.SortType.NAME_ASC
     private var currentQuery = ""
-    private var isFirstLoad = true
-    private val handler = Handler(Looper.getMainLooper())
-    private var loadJob: Job? = null
 
-    // Scroll state management
+    private val handler = Handler(Looper.getMainLooper())
     private var scrollPosition = 0
     private var scrollOffset = 0
 
@@ -51,48 +50,7 @@ class ArtistsFragment : Fragment() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == "SEARCH_QUERY_CHANGED") {
                 currentQuery = intent.getStringExtra("query") ?: ""
-                filterArtists()
-            }
-        }
-    }
-
-    fun setScrollingEnabled(enabled: Boolean) {
-        try {
-            if (this::recyclerView.isInitialized) {
-                recyclerView.isNestedScrollingEnabled = enabled
-                recyclerView.isEnabled = enabled
-
-                if (!enabled) {
-                    recyclerView.setOnTouchListener { _, _ -> true }
-                } else {
-                    recyclerView.setOnTouchListener(null)
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("ArtistsFragment", "Error setting scrolling enabled: $enabled", e)
-        }
-    }
-
-    fun saveScrollState() {
-        if (this::recyclerView.isInitialized) {
-            val layoutManager = recyclerView.layoutManager as? LinearLayoutManager
-            layoutManager?.let {
-                scrollPosition = it.findFirstVisibleItemPosition()
-                val firstVisibleView = it.findViewByPosition(scrollPosition)
-                scrollOffset = firstVisibleView?.top ?: 0
-                Log.d("ArtistsFragment", "Saved scroll state: position=$scrollPosition, offset=$scrollOffset")
-            }
-        }
-    }
-
-    fun restoreScrollState() {
-        if (this::recyclerView.isInitialized) {
-            val layoutManager = recyclerView.layoutManager as? LinearLayoutManager
-            layoutManager?.let {
-                handler.postDelayed({
-                    it.scrollToPositionWithOffset(scrollPosition, scrollOffset)
-                    Log.d("ArtistsFragment", "Restored scroll state: position=$scrollPosition, offset=$scrollOffset")
-                }, 100)
+                processAndSubmitList()
             }
         }
     }
@@ -105,7 +63,7 @@ class ArtistsFragment : Fragment() {
                 if (newSortType != currentSortType) {
                     currentSortType = newSortType
                     PreferenceManager.saveSortPreference(requireContext(), "artists", currentSortType)
-                    loadArtists()
+                    processAndSubmitList()
                 }
             }
         }
@@ -114,7 +72,7 @@ class ArtistsFragment : Fragment() {
     private val refreshReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == "FORCE_REFRESH_ARTISTS") {
-                loadArtists()
+                SongRepository.refreshSongs(requireContext())
             }
         }
     }
@@ -131,25 +89,113 @@ class ArtistsFragment : Fragment() {
         recyclerView = view.findViewById(R.id.category_recycler_view)
         emptyView = view.findViewById(R.id.tv_empty_category)
         loadingProgress = view.findViewById(R.id.loading_progress)
-        recyclerView.layoutManager = LinearLayoutManager(context)
+
+        setupRecyclerView()
         return view
+    }
+
+    private fun setupRecyclerView() {
+        recyclerView.layoutManager = LinearLayoutManager(context)
+        artistAdapter = ArtistAdapter { position ->
+            openArtistSongs(position)
+        }
+        recyclerView.adapter = artistAdapter
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        // Fix: Add Padding for MiniPlayer
         val bottomPadding = (140 * resources.displayMetrics.density).toInt()
         recyclerView.clipToPadding = false
         recyclerView.setPadding(0, 0, 0, bottomPadding)
 
-        if (artistList.isNotEmpty()) {
-            updateAdapter()
-            restoreScrollState()
-        } else {
-            showLoading()
+        // Reactive Data Loading
+        viewLifecycleOwner.lifecycleScope.launch {
+            if (SongRepository.getAllSongs(requireContext()).isEmpty()) {
+                loadingProgress.visibility = View.VISIBLE
+            }
+
+            SongRepository.getSongsFlow().collectLatest { songs ->
+                processArtistsFromSongs(songs)
+            }
         }
     }
 
+    private suspend fun processArtistsFromSongs(songs: List<Song>) {
+        withContext(Dispatchers.IO) {
+            val artistMap = songs.groupBy { it.artist ?: "Unknown Artist" }
+                .mapValues { entry ->
+                    Artist(
+                        name = entry.key,
+                        songCount = entry.value.size,
+                        songs = entry.value.toMutableList()
+                    )
+                }
+            allArtists = artistMap.values.toList()
+
+            withContext(Dispatchers.Main) {
+                loadingProgress.visibility = View.GONE
+                processAndSubmitList()
+
+                if (allArtists.isEmpty()) {
+                    emptyView.visibility = View.VISIBLE
+                } else {
+                    emptyView.visibility = View.GONE
+                }
+            }
+        }
+    }
+
+    private fun processAndSubmitList() {
+        var processedList = if (currentQuery.isBlank()) {
+            allArtists.toMutableList()
+        } else {
+            allArtists.filter { it.name.contains(currentQuery, true) }.toMutableList()
+        }
+
+        when (currentSortType) {
+            MainActivity.SortType.NAME_ASC -> processedList.sortBy { it.name.lowercase() }
+            MainActivity.SortType.NAME_DESC -> processedList.sortByDescending { it.name.lowercase() }
+            else -> processedList.sortBy { it.name.lowercase() }
+        }
+
+        artistAdapter.submitList(processedList) {
+            if (scrollPosition > 0) {
+                restoreScrollState()
+            }
+        }
+    }
+
+    // Bridge for MusicPageFragment
+    fun refreshData() {
+        if (isAdded) SongRepository.refreshSongs(requireContext())
+    }
+
+    fun refreshDataPreserveState() {
+        refreshData()
+    }
+
+    private fun openArtistSongs(position: Int) {
+        if (position < 0 || position >= artistAdapter.currentList.size) return
+        val artist = artistAdapter.currentList[position]
+        val fragment = ArtistSongsFragment.newInstance(artist)
+
+        val parent = parentFragment?.parentFragment
+        if (parent is HomePageFragment) {
+            parent.childFragmentManager.beginTransaction()
+                .setCustomAnimations(R.anim.slide_in_right, R.anim.slide_out_left, R.anim.slide_in_left, R.anim.slide_out_right)
+                .replace(R.id.home_content_container, fragment)
+                .addToBackStack("artist_songs")
+                .commit()
+            parent.updateMiniPlayerPosition()
+        } else {
+            requireActivity().supportFragmentManager.beginTransaction()
+                .replace(R.id.fragment_container, fragment)
+                .addToBackStack("artist_songs")
+                .commit()
+        }
+    }
+
+    // ... (Scroll state and Receiver registration code remains same) ...
     override fun onResume() {
         super.onResume()
         val searchFilter = IntentFilter("SEARCH_QUERY_CHANGED")
@@ -166,16 +212,8 @@ class ArtistsFragment : Fragment() {
             requireActivity().registerReceiver(refreshReceiver, refreshFilter)
         }
 
-        val savedSortType = PreferenceManager.getSortPreferenceWithDefault(requireContext(), "artists")
-        if (savedSortType != currentSortType) {
-            currentSortType = savedSortType
-            loadArtists()
-        } else if (isFirstLoad) {
-            loadArtists()
-            isFirstLoad = false
-        } else {
-            loadArtistsPreserveState()
-        }
+        // Trigger background check
+        SongRepository.refreshSongs(requireContext())
     }
 
     override fun onPause() {
@@ -185,132 +223,35 @@ class ArtistsFragment : Fragment() {
             requireActivity().unregisterReceiver(sortReceiver)
             requireActivity().unregisterReceiver(refreshReceiver)
         } catch (e: Exception) {}
-        loadJob?.cancel()
         saveScrollState()
     }
 
-    fun refreshData() {
-        if (isAdded) loadArtists()
-    }
-
-    fun refreshDataPreserveState() {
-        if (isAdded) loadArtistsPreserveState()
-    }
-
-    private fun showLoading() {
-        loadingProgress.visibility = View.VISIBLE
-        recyclerView.visibility = View.GONE
-        emptyView.visibility = View.GONE
-    }
-
-    private fun hideLoading() {
-        loadingProgress.visibility = View.GONE
-        recyclerView.visibility = View.VISIBLE
-    }
-
-    private fun loadArtists() {
-        if (artistList.isEmpty()) {
-            showLoading()
+    fun setScrollingEnabled(enabled: Boolean) {
+        if (this::recyclerView.isInitialized) {
+            recyclerView.isNestedScrollingEnabled = enabled
+            recyclerView.isEnabled = enabled
         }
-        loadJob?.cancel()
-        loadJob = CoroutineScope(Dispatchers.Main).launch {
-            try {
-                val songs = SongRepository.getAllSongs(requireContext())
-                val artistMap = songs.groupBy { it.artist ?: "Unknown Artist" }
-                    .mapValues { entry ->
-                        Artist(
-                            name = entry.key,
-                            songCount = entry.value.size,
-                            songs = entry.value.toMutableList()
-                        )
-                    }
-                artistList.clear()
-                artistList.addAll(artistMap.values)
-                applyCurrentSort()
-            } catch (e: Exception) {
-                Log.e("ArtistsFragment", "Error loading artists", e)
-                hideLoading()
-                emptyView.visibility = View.VISIBLE
+    }
+
+    fun saveScrollState() {
+        if (this::recyclerView.isInitialized) {
+            val layoutManager = recyclerView.layoutManager as? LinearLayoutManager
+            layoutManager?.let {
+                scrollPosition = it.findFirstVisibleItemPosition()
+                val firstVisibleView = it.findViewByPosition(scrollPosition)
+                scrollOffset = firstVisibleView?.top ?: 0
             }
         }
     }
 
-    private fun loadArtistsPreserveState() {
-        loadJob?.cancel()
-        loadJob = CoroutineScope(Dispatchers.Main).launch {
-            try {
-                val songs = SongRepository.getAllSongs(requireContext())
-                val artistMap = songs.groupBy { it.artist ?: "Unknown Artist" }
-                    .mapValues { entry ->
-                        Artist(
-                            name = entry.key,
-                            songCount = entry.value.size,
-                            songs = entry.value.toMutableList()
-                        )
-                    }
-                artistList.clear()
-                artistList.addAll(artistMap.values)
-                applyCurrentSortPreserveState()
-            } catch (e: Exception) {
-                Log.e("ArtistsFragment", "Error in loadArtistsPreserveState", e)
+    fun restoreScrollState() {
+        if (this::recyclerView.isInitialized) {
+            val layoutManager = recyclerView.layoutManager as? LinearLayoutManager
+            layoutManager?.let {
+                handler.postDelayed({
+                    it.scrollToPositionWithOffset(scrollPosition, scrollOffset)
+                }, 100)
             }
-        }
-    }
-
-    private fun applyCurrentSort() {
-        when (currentSortType) {
-            MainActivity.SortType.NAME_ASC -> artistList.sortBy { it.name.lowercase() }
-            MainActivity.SortType.NAME_DESC -> artistList.sortByDescending { it.name.lowercase() }
-            else -> artistList.sortBy { it.name.lowercase() }
-        }
-        filterArtists()
-    }
-
-    private fun applyCurrentSortPreserveState() {
-        applyCurrentSort()
-        handler.postDelayed({ restoreScrollState() }, 200)
-    }
-
-    private fun filterArtists() {
-        filteredArtistList = if (currentQuery.isBlank()) {
-            artistList.toMutableList()
-        } else {
-            artistList.filter { it.name.contains(currentQuery, true) }.toMutableList()
-        }
-        updateAdapter()
-    }
-
-    private fun updateAdapter() {
-        if (!isAdded) return
-        val adapter = ArtistAdapter(
-            artists = filteredArtistList,
-            onArtistClick = { position -> openArtistSongs(position) }
-        )
-        recyclerView.adapter = adapter
-        hideLoading()
-        emptyView.visibility = if (filteredArtistList.isEmpty()) View.VISIBLE else View.GONE
-    }
-
-    private fun openArtistSongs(position: Int) {
-        if (position < 0 || position >= filteredArtistList.size) return
-        val artist = filteredArtistList[position]
-        val fragment = ArtistSongsFragment.newInstance(artist)
-
-        // Navigation Logic: Check hierarchy
-        val parent = parentFragment?.parentFragment // MusicPage -> Home
-
-        if (parent is HomePageFragment) {
-            parent.childFragmentManager.beginTransaction()
-                .setCustomAnimations(R.anim.slide_in_right, R.anim.slide_out_left, R.anim.slide_in_left, R.anim.slide_out_right)
-                .replace(R.id.home_content_container, fragment)
-                .addToBackStack("artist_songs")
-                .commit()
-            parent.updateMiniPlayerPosition()
-        } else {
-            requireActivity().supportFragmentManager.beginTransaction()
-                .replace(R.id.fragment_container, fragment)
-                .addToBackStack("artist_songs")
-                .commit()
         }
     }
 }

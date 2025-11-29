@@ -277,7 +277,7 @@ class HomeFragment : Fragment() {
     private fun updateAdapter() {
         val adapter = SongAdapter(
             context = requireContext(),
-            songs = filteredSongList,
+            // FIXED: Removed 'songs' parameter from constructor
             onItemClick = { pos -> openNowPlaying(pos) },
             onDataChanged = {
                 loadSongs() // Reload song list
@@ -285,6 +285,8 @@ class HomeFragment : Fragment() {
             },
             onDeleteRequest = { song -> requestDeleteSong(song) } // Pass the delete request handler
         )
+        // FIXED: Submit list separately
+        adapter.submitList(ArrayList(filteredSongList))
         recyclerView.adapter = adapter
     }
 

@@ -223,11 +223,13 @@ class PlaylistSongsFragment : Fragment() {
             recyclerView.visibility = View.VISIBLE
             val adapter = SongAdapter(
                 context = requireContext(),
-                songs = playlistSongsList,
+                // FIXED: Removed 'songs' parameter
                 onItemClick = { pos -> openNowPlaying(pos) },
                 onDataChanged = { refreshData() },
                 onDeleteRequest = { song -> requestDeleteSong(song) }
             )
+            // FIXED: Submit list separately
+            adapter.submitList(ArrayList(playlistSongsList))
             recyclerView.adapter = adapter
             btnPlay.isEnabled = true
             btnShuffle.isEnabled = true

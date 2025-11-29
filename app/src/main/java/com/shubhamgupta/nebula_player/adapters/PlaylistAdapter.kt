@@ -7,19 +7,19 @@ import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.appcompat.widget.PopupMenu
+import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.shubhamgupta.nebula_player.R
 import com.shubhamgupta.nebula_player.models.Playlist
 import com.shubhamgupta.nebula_player.utils.DebugUtils
-import com.shubhamgupta.nebula_player.utils.SongUtils
 
 class PlaylistAdapter(
-    private val playlists: List<Playlist>,
     private val onItemClick: (position: Int) -> Unit,
     private val onMenuClick: (position: Int, menuItem: String) -> Unit,
     private val getAlbumArtForPlaylist: (Playlist) -> Any?
-) : RecyclerView.Adapter<PlaylistAdapter.PlaylistViewHolder>() {
+) : ListAdapter<Playlist, PlaylistAdapter.PlaylistViewHolder>(PlaylistDiffCallback()) {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PlaylistViewHolder {
         val view = LayoutInflater.from(parent.context)
@@ -28,7 +28,7 @@ class PlaylistAdapter(
     }
 
     override fun onBindViewHolder(holder: PlaylistViewHolder, position: Int) {
-        val playlist = playlists[position]
+        val playlist = getItem(position)
         holder.bind(playlist)
 
         holder.itemView.setOnClickListener {
@@ -39,8 +39,6 @@ class PlaylistAdapter(
             showPopupMenu(view, position)
         }
     }
-
-    override fun getItemCount(): Int = playlists.size
 
     private fun showPopupMenu(view: View, position: Int) {
         val popup = PopupMenu(view.context, view)
@@ -89,7 +87,6 @@ class PlaylistAdapter(
             try {
                 when (albumArtResource) {
                     is Int -> {
-                        // It's a drawable resource ID
                         Glide.with(itemView.context)
                             .load(albumArtResource)
                             .placeholder(R.drawable.default_album_art)
@@ -97,7 +94,6 @@ class PlaylistAdapter(
                             .into(albumArt)
                     }
                     is ByteArray -> {
-                        // It's embedded album art bytes
                         Glide.with(itemView.context)
                             .load(albumArtResource)
                             .placeholder(R.drawable.default_album_art)
@@ -105,7 +101,6 @@ class PlaylistAdapter(
                             .into(albumArt)
                     }
                     is android.net.Uri -> {
-                        // It's a URI
                         Glide.with(itemView.context)
                             .load(albumArtResource)
                             .placeholder(R.drawable.default_album_art)
@@ -113,7 +108,6 @@ class PlaylistAdapter(
                             .into(albumArt)
                     }
                     else -> {
-                        // Default album art
                         Glide.with(itemView.context)
                             .load(R.drawable.default_album_art)
                             .into(albumArt)
@@ -121,11 +115,20 @@ class PlaylistAdapter(
                 }
             } catch (e: Exception) {
                 DebugUtils.logError("Error loading album art", e)
-                // Fallback to default
                 Glide.with(itemView.context)
                     .load(R.drawable.default_album_art)
                     .into(albumArt)
             }
+        }
+    }
+
+    class PlaylistDiffCallback : DiffUtil.ItemCallback<Playlist>() {
+        override fun areItemsTheSame(oldItem: Playlist, newItem: Playlist): Boolean {
+            return oldItem.id == newItem.id
+        }
+
+        override fun areContentsTheSame(oldItem: Playlist, newItem: Playlist): Boolean {
+            return oldItem == newItem
         }
     }
 }

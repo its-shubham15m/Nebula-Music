@@ -130,11 +130,13 @@ class RecentFragment : Fragment() {
         recyclerView.layoutManager = LinearLayoutManager(requireContext())
         adapter = SongAdapter(
             context = requireContext(),
-            songs = recentSongs,
+            // FIXED: Removed 'songs' parameter
             onItemClick = { position -> playSong(position) },
             onDataChanged = { refreshData() },
             onDeleteRequest = { song -> requestDeleteSong(song) }
         )
+        // FIXED: Submit list separately
+        adapter.submitList(ArrayList(recentSongs))
         recyclerView.adapter = adapter
     }
 

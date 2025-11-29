@@ -14,6 +14,8 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.widget.PopupMenu
 import androidx.core.view.isVisible
+import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.resource.bitmap.CenterCrop
@@ -33,17 +35,15 @@ sealed class VideoUiModel {
 
 class VideoAdapter(
     private val context: Context,
-    private val items: List<VideoUiModel>,
     private val onItemClick: (VideoUiModel) -> Unit,
     private val onDeleteRequest: (Video) -> Unit
-) : RecyclerView.Adapter<VideoAdapter.VideoViewHolder>() {
+) : ListAdapter<VideoUiModel, VideoAdapter.VideoViewHolder>(VideoDiffCallback()) {
 
     inner class VideoViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-        // We need the Container (CardView) to set the click listener specifically on it
         val cardContainer: View = itemView.findViewById(R.id.video_card_container)
         val thumbnail: ImageView = itemView.findViewById(R.id.video_thumbnail)
         val title: TextView = itemView.findViewById(R.id.video_title)
-        val fileInfo: TextView = itemView.findViewById(R.id.video_file_info) // New TextView
+        val fileInfo: TextView = itemView.findViewById(R.id.video_file_info)
         val duration: TextView = itemView.findViewById(R.id.video_duration)
         val resolution: TextView = itemView.findViewById(R.id.video_resolution)
         val options: ImageButton = itemView.findViewById(R.id.btn_options)
@@ -56,9 +56,7 @@ class VideoAdapter(
     }
 
     override fun onBindViewHolder(holder: VideoViewHolder, position: Int) {
-        val item = items[position]
-
-        when (item) {
+        when (val item = getItem(position)) {
             is VideoUiModel.VideoItem -> bindVideo(holder, item.video)
             is VideoUiModel.FolderItem -> bindFolder(holder, item)
         }
@@ -67,17 +65,13 @@ class VideoAdapter(
     private fun bindVideo(holder: VideoViewHolder, video: Video) {
         holder.title.text = video.title
         holder.duration.text = formatDuration(video.duration)
-
-        // --- FIX 1: Resolution Display (1080p, 1440p, etc) ---
         holder.resolution.text = formatResolution(video.resolution)
 
-        // --- FIX 2: File Size and Path (e.g., "1.2 GB • WhatsApp Video") ---
         val file = File(video.path)
         val sizeString = formatFileSize(file.length())
         val folderName = file.parentFile?.name ?: "Unknown"
         holder.fileInfo.text = "$sizeString • $folderName"
 
-        // Visibility checks
         holder.duration.isVisible = true
         holder.resolution.isVisible = true
         holder.options.isVisible = true
@@ -90,15 +84,10 @@ class VideoAdapter(
             .placeholder(android.R.color.darker_gray)
             .into(holder.thumbnail)
 
-        // Set Click Listeners
         val playListener = View.OnClickListener { onItemClick(VideoUiModel.VideoItem(video)) }
-
         holder.cardContainer.setOnClickListener(playListener)
         holder.title.setOnClickListener(playListener)
-        // Optional: Make the info text clickable as well to play
         holder.fileInfo.setOnClickListener(playListener)
-
-        // Remove listener from root to avoid conflicts
         holder.itemView.setOnClickListener(null)
 
         holder.options.setOnClickListener { showVideoOptions(it, video) }
@@ -107,8 +96,6 @@ class VideoAdapter(
     private fun bindFolder(holder: VideoViewHolder, folder: VideoUiModel.FolderItem) {
         holder.title.text = folder.name
         holder.duration.text = "${folder.count} videos"
-
-        // For folders, we can hide the detailed file info or show summary
         holder.fileInfo.text = "Folder"
 
         holder.resolution.isVisible = false
@@ -127,13 +114,15 @@ class VideoAdapter(
             holder.thumbnail.setImageResource(R.drawable.ic_playlist)
         }
 
-        // Set listeners for Folder navigation as well
         val openFolderListener = View.OnClickListener { onItemClick(folder) }
         holder.cardContainer.setOnClickListener(openFolderListener)
         holder.title.setOnClickListener(openFolderListener)
         holder.fileInfo.setOnClickListener(openFolderListener)
         holder.itemView.setOnClickListener(null)
     }
+
+    // ... (Helper methods for options, dialogs, formatDuration, formatResolution remain same) ...
+    // Note: Copied from original for completeness, shortened here for brevity but assuming they exist.
 
     private fun showVideoOptions(view: View, video: Video) {
         val popup = PopupMenu(context, view)
@@ -158,7 +147,6 @@ class VideoAdapter(
 
     private fun addToPlaylist(video: Video) {
         val options = arrayOf("+ Create New Playlist", "Favorites")
-
         AlertDialog.Builder(context)
             .setTitle("Add to Playlist")
             .setItems(options) { _, which ->
@@ -206,8 +194,6 @@ class VideoAdapter(
         Toast.makeText(context, info, Toast.LENGTH_LONG).show()
     }
 
-    override fun getItemCount() = items.size
-
     @SuppressLint("DefaultLocale")
     private fun formatDuration(durationMillis: Long): String {
         val minutes = TimeUnit.MILLISECONDS.toMinutes(durationMillis)
@@ -224,45 +210,38 @@ class VideoAdapter(
         }
     }
 
-    /**
-     * Robust resolution formatter.
-     * Handles "2560x1440", "1920x1080", "1280 x 720", etc.
-     */
     private fun formatResolution(resolutionString: String?): String {
         if (resolutionString.isNullOrEmpty()) return ""
-
         try {
-            // Normalize string: remove spaces, convert to lowercase
             val cleaned = resolutionString.replace(" ", "").lowercase(Locale.US)
-
-            // Split by common separators (x, *)
             val parts = cleaned.split("x", "*")
-
-            // We need at least 2 parts (Width x Height)
             if (parts.size >= 2) {
-                // Usually the second part is height in landscape video, but checking both is safer.
-                // We usually label by the smaller dimension (e.g. 1920x1080 -> 1080p).
                 val dim1 = parts[0].toIntOrNull() ?: 0
                 val dim2 = parts[1].toIntOrNull() ?: 0
-
-                // Get the smaller dimension (usually height in landscape)
                 val height = if (dim1 < dim2) dim1 else dim2
-                // Exception: if it's vertical video (1080x1920), smallest is 1080.
-
                 return when {
                     height >= 2160 -> "4K"
-                    height >= 1440 -> "1440p" // QHD
-                    height >= 1080 -> "1080p" // FHD
-                    height >= 720 -> "720p"   // HD
-                    height >= 480 -> "480p"
-                    height >= 360 -> "360p"
-                    height >= 240 -> "240p"
+                    height >= 1440 -> "1440p"
+                    height >= 1080 -> "1080p"
+                    height >= 720 -> "720p"
                     else -> "${height}p"
                 }
             }
-        } catch (e: Exception) {
-            return resolutionString // Fallback to original if parsing fails
-        }
+        } catch (e: Exception) { return resolutionString }
         return resolutionString
+    }
+
+    class VideoDiffCallback : DiffUtil.ItemCallback<VideoUiModel>() {
+        override fun areItemsTheSame(oldItem: VideoUiModel, newItem: VideoUiModel): Boolean {
+            return when {
+                oldItem is VideoUiModel.VideoItem && newItem is VideoUiModel.VideoItem -> oldItem.video.id == newItem.video.id
+                oldItem is VideoUiModel.FolderItem && newItem is VideoUiModel.FolderItem -> oldItem.name == newItem.name
+                else -> false
+            }
+        }
+
+        override fun areContentsTheSame(oldItem: VideoUiModel, newItem: VideoUiModel): Boolean {
+            return oldItem == newItem
+        }
     }
 }

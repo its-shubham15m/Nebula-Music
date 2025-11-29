@@ -129,11 +129,13 @@ class FavoritesFragment : Fragment() {
         recyclerView.layoutManager = LinearLayoutManager(context)
         adapter = SongAdapter(
             context = requireContext(),
-            songs = favoriteSongs,
+            // FIXED: Removed 'songs' parameter
             onItemClick = { position -> playSong(position) },
             onDataChanged = { refreshData() },
             onDeleteRequest = { song -> requestDeleteSong(song) }
         )
+        // FIXED: Submit list separately
+        adapter.submitList(ArrayList(favoriteSongs))
         recyclerView.adapter = adapter
     }
 

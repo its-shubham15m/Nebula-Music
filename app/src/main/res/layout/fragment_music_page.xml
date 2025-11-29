@@ -9,14 +9,14 @@
     android:background="@color/colorBackground"
     android:fitsSystemWindows="true">
 
-    <!-- Header matching the sketch: Hamburger + Title -->
+    <!-- Header: Clean & Balanced (Reduced vertical padding) -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:paddingTop="10dp"
-        android:paddingBottom="10dp">
+        android:paddingVertical="8dp"
+        android:paddingHorizontal="8dp">
 
         <ImageButton
             android:id="@+id/sidebar_toggle"
@@ -26,7 +26,6 @@
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="Menu"
             android:padding="12dp"
-            android:layout_marginStart="8dp"
             app:tint="?attr/colorOnSurface"/>
 
         <TextView
@@ -37,31 +36,33 @@
             android:textSize="22sp"
             android:textStyle="bold"
             android:gravity="center"
-            android:fontFamily="sans-serif-light"
+            android:fontFamily="sans-serif-medium"
             android:textColor="?attr/colorOnSurface"/>
 
-        <!-- Invisible view to balance the hamburger icon for perfect centering -->
+        <!-- Invisible view for balance -->
         <View
             android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_marginEnd="8dp"/>
+            android:layout_height="48dp"/>
     </LinearLayout>
 
-    <!-- Quick Action Cards -->
+    <!-- Quick Action Cards (Reduced height and padding) -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:paddingHorizontal="4dp"
+        android:paddingHorizontal="12dp"
+        android:paddingBottom="4dp"
         android:baselineAligned="false">
 
+        <!-- Favorites -->
         <androidx.cardview.widget.CardView
             android:id="@+id/card_favorites"
             android:layout_width="0dp"
-            android:layout_height="70dp"
+            android:layout_height="72dp"
             android:layout_weight="1"
-            android:layout_margin="4dp"
+            android:layout_marginEnd="8dp"
             app:cardCornerRadius="16dp"
+            app:cardElevation="4dp"
             app:cardBackgroundColor="#673AB7">
             <FrameLayout
                 android:layout_width="match_parent"
@@ -73,22 +74,20 @@
                     android:scaleType="centerCrop"
                     android:contentDescription="Favorite Album Art"
                     android:src="@drawable/default_album_art"
-                    android:background="@android:color/transparent"
-                    />
+                    android:alpha="0.8"/>
                 <View
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
-                    android:background="#4D000000" />
+                    android:background="#66000000" />
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
                     android:orientation="vertical"
                     android:gravity="center_vertical"
                     android:paddingStart="12dp">
-
                     <ImageView
-                        android:layout_width="20dp"
-                        android:layout_height="20dp"
+                        android:layout_width="18dp"
+                        android:layout_height="18dp"
                         android:src="@drawable/ic_favorite_filled"
                         app:tint="@android:color/white"
                         android:contentDescription="Favorites Icon" />
@@ -98,30 +97,29 @@
                         android:layout_height="wrap_content"
                         android:text="Favorites"
                         android:textColor="@android:color/white"
-                        android:textSize="12sp"
+                        android:textSize="13sp"
                         android:textStyle="bold"
-                        android:layout_marginTop="2dp"
-                        android:singleLine="true"
-                        android:ellipsize="end"
-                        tools:text="Favorite Songs"/>
+                        android:layout_marginTop="2dp"/>
                     <TextView
                         android:id="@+id/card_fav_count"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         tools:text="15 songs"
-                        android:textColor="#B3FFFFFF"
+                        android:textColor="#CCFFFFFF"
                         android:textSize="10sp"/>
                 </LinearLayout>
             </FrameLayout>
         </androidx.cardview.widget.CardView>
 
+        <!-- Playlists -->
         <androidx.cardview.widget.CardView
             android:id="@+id/card_playlists"
             android:layout_width="0dp"
-            android:layout_height="70dp"
+            android:layout_height="72dp"
             android:layout_weight="1"
-            android:layout_margin="4dp"
+            android:layout_marginEnd="8dp"
             app:cardCornerRadius="16dp"
+            app:cardElevation="4dp"
             app:cardBackgroundColor="#4CAF50">
             <FrameLayout
                 android:layout_width="match_parent"
@@ -132,11 +130,11 @@
                     android:layout_height="match_parent"
                     android:src="@drawable/default_album_art"
                     android:scaleType="centerCrop"
-                    android:contentDescription="Playlists Album Art Background" />
+                    android:alpha="0.8"/>
                 <View
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
-                    android:background="#4D000000" />
+                    android:background="#66000000" />
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
@@ -144,8 +142,8 @@
                     android:gravity="center_vertical"
                     android:paddingStart="12dp">
                     <ImageView
-                        android:layout_width="20dp"
-                        android:layout_height="20dp"
+                        android:layout_width="18dp"
+                        android:layout_height="18dp"
                         android:src="@drawable/ic_playlist"
                         app:tint="@android:color/white"
                         android:contentDescription="Playlists Icon" />
@@ -155,30 +153,28 @@
                         android:layout_height="wrap_content"
                         android:text="Playlists"
                         android:textColor="@android:color/white"
-                        android:textSize="12sp"
+                        android:textSize="13sp"
                         android:textStyle="bold"
-                        android:layout_marginTop="2dp"
-                        android:singleLine="true"
-                        android:ellipsize="end"
-                        tools:text="Playlist Name"/>
+                        android:layout_marginTop="2dp"/>
                     <TextView
                         android:id="@+id/card_playlist_count"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         tools:text="3 playlists"
-                        android:textColor="#B3FFFFFF"
+                        android:textColor="#CCFFFFFF"
                         android:textSize="10sp"/>
                 </LinearLayout>
             </FrameLayout>
         </androidx.cardview.widget.CardView>
 
+        <!-- Recent -->
         <androidx.cardview.widget.CardView
             android:id="@+id/card_recent"
             android:layout_width="0dp"
-            android:layout_height="70dp"
+            android:layout_height="72dp"
             android:layout_weight="1"
-            android:layout_margin="4dp"
             app:cardCornerRadius="16dp"
+            app:cardElevation="4dp"
             app:cardBackgroundColor="#FF9800">
             <FrameLayout
                 android:layout_width="match_parent"
@@ -189,11 +185,11 @@
                     android:layout_height="match_parent"
                     android:src="@drawable/default_album_art"
                     android:scaleType="centerCrop"
-                    android:contentDescription="Recent Album Art Background" />
+                    android:alpha="0.8"/>
                 <View
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
-                    android:background="#4D000000" />
+                    android:background="#66000000" />
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
@@ -201,8 +197,8 @@
                     android:gravity="center_vertical"
                     android:paddingStart="12dp">
                     <ImageView
-                        android:layout_width="20dp"
-                        android:layout_height="20dp"
+                        android:layout_width="18dp"
+                        android:layout_height="18dp"
                         android:src="@drawable/ic_recent"
                         app:tint="@android:color/white"
                         android:contentDescription="Recent Icon" />
@@ -212,55 +208,56 @@
                         android:layout_height="wrap_content"
                         android:text="Recent"
                         android:textColor="@android:color/white"
-                        android:textSize="12sp"
+                        android:textSize="13sp"
                         android:textStyle="bold"
-                        android:layout_marginTop="2dp"
-                        android:singleLine="true"
-                        android:ellipsize="end"
-                        tools:text="Last Played Song"/>
+                        android:layout_marginTop="2dp"/>
                     <TextView
                         android:id="@+id/card_recent_count"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         tools:text="3 songs"
-                        android:textColor="#B3FFFFFF"
+                        android:textColor="#CCFFFFFF"
                         android:textSize="10sp"/>
                 </LinearLayout>
             </FrameLayout>
         </androidx.cardview.widget.CardView>
     </LinearLayout>
 
-    <!-- Category Tabs (Removed Videos) -->
+    <!-- Category Tabs (Reduced vertical padding) -->
     <HorizontalScrollView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:padding="2dp"
-        android:scrollbars="none">
+        android:paddingVertical="4dp"
+        android:scrollbars="none"
+        android:overScrollMode="never">
 
         <LinearLayout
             android:id="@+id/categories_container"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:paddingHorizontal="8dp">
+            android:paddingHorizontal="16dp">
 
             <TextView
                 android:id="@+id/tab_songs"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Songs"
-                android:textSize="16sp"
-                android:textStyle="normal"
-                android:padding="8dp"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:paddingVertical="8dp"
+                android:paddingHorizontal="12dp"
                 android:background="?attr/selectableItemBackground"
                 android:textColor="?attr/colorOnSurface" />
+
             <TextView
                 android:id="@+id/tab_artists"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Artists"
-                android:textSize="16sp"
-                android:padding="8dp"
+                android:textSize="18sp"
+                android:paddingVertical="8dp"
+                android:paddingHorizontal="12dp"
                 android:background="?attr/selectableItemBackground"
                 android:textColor="?attr/colorOnSurfaceVariant" />
 
@@ -269,8 +266,9 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Albums"
-                android:textSize="16sp"
-                android:padding="8dp"
+                android:textSize="18sp"
+                android:paddingVertical="8dp"
+                android:paddingHorizontal="12dp"
                 android:background="?attr/selectableItemBackground"
                 android:textColor="?attr/colorOnSurfaceVariant" />
 
@@ -279,34 +277,32 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Genres"
-                android:textSize="16sp"
-                android:padding="8dp"
+                android:textSize="18sp"
+                android:paddingVertical="8dp"
+                android:paddingHorizontal="12dp"
                 android:background="?attr/selectableItemBackground"
                 android:textColor="?attr/colorOnSurfaceVariant" />
-
-            <!-- Videos tab removed as it is now in BottomNav -->
         </LinearLayout>
     </HorizontalScrollView>
 
-    <!-- Shuffle and Sort Controls -->
+    <!-- Action Bar (Reduced vertical padding) -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:paddingStart="12dp"
-        android:paddingEnd="8dp"
-        android:gravity="center_vertical">
+        android:gravity="center_vertical"
+        android:paddingHorizontal="16dp"
+        android:paddingBottom="4dp">
 
+        <!-- Shuffle Pill -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/shuffle_all_card"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            app:cardCornerRadius="24dp"
-            app:strokeColor="?attr/colorOutline"
-            app:strokeWidth="1dp"
-            app:cardElevation="2dp"
-            app:cardBackgroundColor="@color/shuffle_card_background"
-            android:layout_marginEnd="8dp">
+            app:cardCornerRadius="20dp"
+            app:strokeWidth="0dp"
+            app:cardElevation="0dp"
+            app:cardBackgroundColor="@color/shuffle_card_background">
 
             <LinearLayout
                 android:layout_width="wrap_content"
@@ -314,14 +310,14 @@
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
                 android:paddingStart="16dp"
-                android:paddingEnd="16dp"
-                android:paddingVertical="10dp"
+                android:paddingEnd="20dp"
+                android:paddingVertical="8dp"
                 android:background="?attr/selectableItemBackground">
 
                 <ImageView
                     android:id="@+id/btn_shuffle"
-                    android:layout_width="20dp"
-                    android:layout_height="20dp"
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
                     android:src="@drawable/shuffle"
                     app:tint="?attr/colorOnSurface"
                     android:contentDescription="Shuffle All" />
@@ -330,8 +326,8 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Shuffle All"
-                    android:textSize="16sp"
-                    android:textStyle="normal"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
                     android:textColor="?attr/colorOnSurface"
                     android:layout_marginStart="8dp" />
             </LinearLayout>
@@ -342,28 +338,31 @@
             android:layout_height="1dp"
             android:layout_weight="1"/>
 
+        <!-- Sorting Tools -->
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical">
+            android:orientation="horizontal">
+
             <ImageButton
                 android:id="@+id/btn_sort"
-                android:layout_width="48dp" android:layout_height="48dp"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
                 android:src="@drawable/ic_sort"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 app:tint="?attr/colorOnSurface"
                 android:contentDescription="Sort"
-                android:padding="10dp"/>
+                android:padding="8dp"/>
 
             <ImageButton
                 android:id="@+id/btn_select"
-                android:layout_width="48dp" android:layout_height="48dp"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
                 android:src="@drawable/ic_select_off"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 app:tint="?attr/colorOnSurface"
                 android:contentDescription="Select"
-                android:padding="10dp"/>
+                android:padding="8dp"/>
         </LinearLayout>
     </LinearLayout>
 
