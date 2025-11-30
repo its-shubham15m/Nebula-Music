@@ -30,7 +30,8 @@ import java.util.Locale
 // Sealed class to handle both Videos and Folders in one list
 sealed class VideoUiModel {
     data class VideoItem(val video: Video) : VideoUiModel()
-    data class FolderItem(val name: String, val count: Int, val firstVideo: Video?) : VideoUiModel()
+    // FIX: Renamed 'firstVideo' to 'representative' to match VideosFragment sorting logic
+    data class FolderItem(val name: String, val count: Int, val representative: Video?) : VideoUiModel()
 }
 
 class VideoAdapter(
@@ -104,9 +105,10 @@ class VideoAdapter(
         holder.duration.isVisible = true
         holder.fileInfo.isVisible = true
 
-        if (folder.firstVideo != null) {
+        // FIX: Using 'representative' instead of 'firstVideo'
+        if (folder.representative != null) {
             Glide.with(context)
-                .load(folder.firstVideo.uri)
+                .load(folder.representative.uri)
                 .apply(RequestOptions().transform(CenterCrop(), RoundedCorners(16)))
                 .placeholder(R.drawable.ic_playlist)
                 .into(holder.thumbnail)
@@ -120,9 +122,6 @@ class VideoAdapter(
         holder.fileInfo.setOnClickListener(openFolderListener)
         holder.itemView.setOnClickListener(null)
     }
-
-    // ... (Helper methods for options, dialogs, formatDuration, formatResolution remain same) ...
-    // Note: Copied from original for completeness, shortened here for brevity but assuming they exist.
 
     private fun showVideoOptions(view: View, video: Video) {
         val popup = PopupMenu(context, view)

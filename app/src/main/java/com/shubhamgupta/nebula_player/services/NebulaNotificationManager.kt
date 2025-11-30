@@ -28,14 +28,18 @@ import com.shubhamgupta.nebula_player.R
 import com.shubhamgupta.nebula_player.models.Song
 import com.shubhamgupta.nebula_player.utils.PreferenceManager
 import com.shubhamgupta.nebula_player.utils.SongUtils
+import java.util.Random
 import java.util.concurrent.TimeUnit
 
-class MusicNotificationManager(private val context: Context) {
+// Renamed from MusicNotificationManager as requested
+class NebulaNotificationManager(private val context: Context) {
 
     companion object {
         const val NOTIFICATION_ID = 101
+        const val ENGAGEMENT_NOTIFICATION_ID = 102
         const val CHANNEL_ID = "nebula_player_channel"
         const val CHANNEL_NAME = "Nebula Music Player"
+        const val ENGAGEMENT_CHANNEL_ID = "nebula_engagement_channel"
     }
 
     private val notificationManager: NotificationManager =
@@ -47,8 +51,20 @@ class MusicNotificationManager(private val context: Context) {
     // Cache for scaled icons to prevent re-drawing them every second
     private val iconCache = mutableMapOf<Int, IconCompat>()
 
+    // Mutable list for Engagement Pop-up messages
+    val engagementMessages = mutableListOf(
+        "Time to relax with your favorite tunes!",
+        "Discover something new in your library today.",
+        "Watch that video you saved for later!",
+        "Music is the soundtrack of your life.",
+        "Nebula Player: Your media, your way.",
+        "Plug in your headphones and drift away.",
+        "Check out your recent playlists!"
+    )
+
     fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            // Media Control Channel
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 CHANNEL_NAME,
@@ -60,26 +76,88 @@ class MusicNotificationManager(private val context: Context) {
                 setSound(null, null) // No sound for music notifications
             }
             notificationManager.createNotificationChannel(channel)
+
+            // Engagement / Pop-up Channel
+            val engagementChannel = NotificationChannel(
+                ENGAGEMENT_CHANNEL_ID,
+                "Nebula Updates",
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply {
+                description = "App updates and suggestions"
+                setShowBadge(true)
+            }
+            notificationManager.createNotificationChannel(engagementChannel)
         }
+    }
+
+    /**
+     * Sends a random pop-up notification from the mutable list
+     */
+    fun sendEngagementNotification() {
+        if (engagementMessages.isEmpty()) return
+
+        val random = Random()
+        val message = engagementMessages[random.nextInt(engagementMessages.size)]
+
+        val intent = Intent(context, MainActivity::class.java)
+        val pendingIntent = PendingIntent.getActivity(
+            context, 0, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        val notification = NotificationCompat.Builder(context, ENGAGEMENT_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_music_note) // Ensure you have a generic icon or use R.drawable.default_album_art
+            .setContentTitle("Nebula Player")
+            .setContentText(message)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            .build()
+
+        notificationManager.notify(ENGAGEMENT_NOTIFICATION_ID, notification)
     }
 
     @OptIn(UnstableApi::class)
     @SuppressLint("ForegroundServiceType", "Range")
     fun updateNotification(service: MusicService, currentSong: Song?, isPlaying: Boolean, repeatMode: MusicService.RepeatMode) {
         if (currentSong == null) {
-            showMinimalNotification(service)
+            // If stopped/null, we allow swipe dismissal
+            cancelNotification()
             return
         }
 
         val notification = buildNotification(context, currentSong, isPlaying, repeatMode, service)
         notificationManager.notify(NOTIFICATION_ID, notification)
 
-        // Always start foreground service when we have a valid notification
+        // FIX: Notification Locking
+        // If playing -> startForeground (Locked/Persistent)
+        // If paused -> stopForeground(false) (Notification stays but is dismissible/unlocked)
         try {
-            service.startForeground(NOTIFICATION_ID, notification)
+            if (isPlaying) {
+                service.startForeground(NOTIFICATION_ID, notification)
+            } else {
+                // This keeps the notification but removes the "Foreground" status, allowing swipe away
+                service.stopForeground(false)
+            }
         } catch (e: Exception) {
-            Log.e("MusicNotificationManager", "Error starting foreground service", e)
+            Log.e("NebulaNotificationManager", "Error managing foreground state", e)
         }
+    }
+
+    /**
+     * New Method to show Video Details in Notification
+     * Call this from VideoPlayerActivity
+     */
+    fun showVideoNotification(title: String, description: String) {
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.default_album_art) // Replace with video icon
+            .setContentTitle(title)
+            .setContentText(description)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOngoing(true) // Video is usually ongoing
+            .setAutoCancel(false)
+            .build()
+
+        notificationManager.notify(NOTIFICATION_ID, notification)
     }
 
     @OptIn(UnstableApi::class)
@@ -91,7 +169,7 @@ class MusicNotificationManager(private val context: Context) {
         try {
             service.startForeground(NOTIFICATION_ID, notification)
         } catch (e: Exception) {
-            Log.e("MusicNotificationManager", "Error starting foreground service with minimal notification", e)
+            Log.e("NebulaNotificationManager", "Error starting foreground service with minimal notification", e)
         }
     }
 
@@ -102,15 +180,12 @@ class MusicNotificationManager(private val context: Context) {
         repeatMode: MusicService.RepeatMode,
         service: MusicService? = null
     ): Notification {
-        // Create all actions in the correct order: [Repeat, Previous, Play/Pause, Next, Favorite]
-        // Using getScaledIcon to make buttons visually smaller
         val repeatAction = createRepeatAction(repeatMode)
         val previousAction = createPreviousAction()
         val playPauseAction = createPlayPauseAction(isPlaying)
         val nextAction = createNextAction()
         val favoriteAction = createFavoriteAction(song)
 
-        // Build notification
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.default_album_art)
             .setContentTitle(song.title)
@@ -118,7 +193,6 @@ class MusicNotificationManager(private val context: Context) {
             .setLargeIcon(loadAlbumArtBitmap(song))
             .setStyle(
                 androidx.media.app.NotificationCompat.MediaStyle()
-                    // Show Previous, Play/Pause, Next in compact view (indices 1, 2, 3)
                     .setShowActionsInCompactView(1, 2, 3)
                     .setMediaSession(service?.let { getMediaSessionToken(it) })
             )
@@ -128,18 +202,20 @@ class MusicNotificationManager(private val context: Context) {
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOnlyAlertOnce(true)
             .setShowWhen(false)
+            // FIX: Only ongoing if playing
             .setOngoing(isPlaying)
             .setAutoCancel(false)
-            // Add actions in the correct order: [0:Repeat, 1:Previous, 2:Play/Pause, 3:Next, 4:Favorite]
             .addAction(repeatAction)
             .addAction(previousAction)
             .addAction(playPauseAction)
             .addAction(nextAction)
             .addAction(favoriteAction)
 
-        // Set content intent
         val contentIntent = createContentIntent()
         builder.setContentIntent(contentIntent)
+
+        // When paused, make the notification deletable (swipable)
+        builder.setDeleteIntent(createDeleteIntent(context))
 
         return builder.build()
     }
@@ -150,19 +226,15 @@ class MusicNotificationManager(private val context: Context) {
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.default_album_art)
             .setContentTitle("Nebula Music")
-            .setContentText("Music service is running")
+            .setContentText("Ready to play")
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setOngoing(true)
+            .setOngoing(false) // Not locked
             .setAutoCancel(false)
             .setContentIntent(contentIntent)
             .build()
     }
 
-    /**
-     * Helper function to scale down icons to make buttons look "smaller/shorter"
-     * Scales icon content to 75% of the canvas
-     */
     private fun getScaledIcon(@DrawableRes resourceId: Int): IconCompat {
         if (iconCache.containsKey(resourceId)) {
             return iconCache[resourceId]!!
@@ -178,7 +250,6 @@ class MusicNotificationManager(private val context: Context) {
             val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
 
-            // Scale down by 25% (0.75 scale) to make the icon look smaller inside the button
             val scale = 0.75f
             val cx = width / 2f
             val cy = height / 2f
@@ -191,7 +262,6 @@ class MusicNotificationManager(private val context: Context) {
             iconCache[resourceId] = icon
             return icon
         } catch (e: Exception) {
-            // Fallback to normal resource if scaling fails
             return IconCompat.createWithResource(context, resourceId)
         }
     }
@@ -205,13 +275,9 @@ class MusicNotificationManager(private val context: Context) {
         }
 
         val pendingIntent = PendingIntent.getService(
-            context,
-            0,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // Use scaled icon
         return NotificationCompat.Action.Builder(getScaledIcon(iconRes), title, pendingIntent).build()
     }
 
@@ -219,15 +285,9 @@ class MusicNotificationManager(private val context: Context) {
         val intent = Intent(context, MusicService::class.java).apply {
             action = "PREVIOUS"
         }
-
         val pendingIntent = PendingIntent.getService(
-            context,
-            1,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            context, 1, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-
-        // Use scaled icon
         return NotificationCompat.Action.Builder(getScaledIcon(R.drawable.ic_previous), "Previous", pendingIntent).build()
     }
 
@@ -235,15 +295,9 @@ class MusicNotificationManager(private val context: Context) {
         val intent = Intent(context, MusicService::class.java).apply {
             action = "NEXT"
         }
-
         val pendingIntent = PendingIntent.getService(
-            context,
-            2,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            context, 2, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-
-        // Use scaled icon
         return NotificationCompat.Action.Builder(getScaledIcon(R.drawable.ic_next), "Next", pendingIntent).build()
     }
 
@@ -253,19 +307,12 @@ class MusicNotificationManager(private val context: Context) {
             MusicService.RepeatMode.SHUFFLE -> Pair(R.drawable.shuffle, "Shuffle")
             else -> Pair(R.drawable.repeat, "Repeat All")
         }
-
         val intent = Intent(context, MusicService::class.java).apply {
             action = "TOGGLE_REPEAT"
         }
-
         val pendingIntent = PendingIntent.getService(
-            context,
-            3,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            context, 3, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-
-        // Use scaled icon
         return NotificationCompat.Action.Builder(getScaledIcon(iconRes), title, pendingIntent).build()
     }
 
@@ -273,19 +320,12 @@ class MusicNotificationManager(private val context: Context) {
         val isFavorite = PreferenceManager.isFavorite(context, song.id)
         val iconRes = if (isFavorite) R.drawable.ic_favorite_filled else R.drawable.ic_favorite_outline
         val title = if (isFavorite) "Unfavorite" else "Favorite"
-
         val intent = Intent(context, MusicService::class.java).apply {
             action = "TOGGLE_FAVORITE"
         }
-
         val pendingIntent = PendingIntent.getService(
-            context,
-            4,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            context, 4, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-
-        // Use scaled icon
         return NotificationCompat.Action.Builder(getScaledIcon(iconRes), title, pendingIntent).build()
     }
 
@@ -294,12 +334,18 @@ class MusicNotificationManager(private val context: Context) {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra("fragment", "now_playing")
         }
-
         return PendingIntent.getActivity(
-            context,
-            0,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+    }
+
+    // Intent to stop service when notification is swiped away
+    private fun createDeleteIntent(context: Context): PendingIntent {
+        val intent = Intent(context, MusicService::class.java).apply {
+            action = "CLOSE"
+        }
+        return PendingIntent.getService(
+            context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
     }
 
@@ -310,16 +356,14 @@ class MusicNotificationManager(private val context: Context) {
                 .asBitmap()
                 .load(albumArtUri)
                 .submit(256, 256)
-                .get(2, TimeUnit.SECONDS) // Add timeout to prevent blocking
+                .get(2, TimeUnit.SECONDS)
         } catch (e: Exception) {
-            // Fallback to default album art
             BitmapFactory.decodeResource(context.resources, R.drawable.default_album_art)
         }
     }
 
     private fun getMediaSessionToken(service: MusicService): MediaSessionCompat.Token? {
         return try {
-            // Use reflection to access the mediaSession field
             val field = service::class.java.getDeclaredField("mediaSession")
             field.isAccessible = true
             val mediaSession = field.get(service) as? MediaSessionCompat
@@ -331,7 +375,6 @@ class MusicNotificationManager(private val context: Context) {
 
     fun startNotificationUpdates(service: MusicService, currentSong: Song?, isPlaying: Boolean) {
         stopNotificationUpdates()
-
         if (isPlaying && currentSong != null) {
             notificationUpdateRunnable = object : Runnable {
                 @SuppressLint("Range")
@@ -341,7 +384,7 @@ class MusicNotificationManager(private val context: Context) {
                         updateNotification(service, currentSong, isPlaying, service.getRepeatMode())
                         notificationHandler.postDelayed(this, 1000)
                     } catch (e: Exception) {
-                        Log.e("MusicNotificationManager", "Error in notification update", e)
+                        Log.e("NebulaNotificationManager", "Error in notification update", e)
                     }
                 }
             }
@@ -356,14 +399,13 @@ class MusicNotificationManager(private val context: Context) {
         notificationUpdateRunnable = null
     }
 
-    // Helper method to remove notification when service stops
     @SuppressLint("Range")
     @OptIn(UnstableApi::class)
     fun cancelNotification() {
         try {
             notificationManager.cancel(NOTIFICATION_ID)
         } catch (e: Exception) {
-            Log.e("MusicNotificationManager", "Error canceling notification", e)
+            Log.e("NebulaNotificationManager", "Error canceling notification", e)
         }
     }
 }

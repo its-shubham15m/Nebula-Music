@@ -38,6 +38,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import java.io.File
 
 class VideosFragment : Fragment() {
 
@@ -68,6 +69,9 @@ class VideosFragment : Fragment() {
     private lateinit var deleteResultLauncher: ActivityResultLauncher<IntentSenderRequest>
 
     private lateinit var videoContentObserver: VideoContentObserver
+
+    // Broadcast Action for MusicService
+    private val ACTION_VIDEO_STARTED = "com.shubhamgupta.nebula_player.ACTION_VIDEO_STARTED"
 
     private val searchReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -183,33 +187,42 @@ class VideosFragment : Fragment() {
         currentUiList.clear()
 
         if (isInFolderView && activeFolderName != null) {
+            // --- FOLDER VIEW ---
             pageTitle?.text = activeFolderName
             btnSort?.setImageResource(androidx.appcompat.R.drawable.abc_ic_ab_back_material)
+
+            // Filter videos belonging to this smart group
             val folderVideos = videoList.filter { getSmartGroupKey(it) == activeFolderName }
             val sortedVideos = sortVideosList(folderVideos)
             currentUiList.addAll(sortedVideos.map { VideoUiModel.VideoItem(it) })
 
         } else if (isFolderSort) {
+            // --- HYBRID VIEW (Folders + Unique Videos) ---
             pageTitle?.text = "Videos"
             btnSort?.setImageResource(R.drawable.ic_sort)
+
             val grouped = videoList.groupBy { getSmartGroupKey(it) }
             val mixedList = mutableListOf<VideoUiModel>()
 
-            grouped.forEach { (groupName, videos) ->
-                if (videos.size > 1) {
+            grouped.forEach { (key, videos) ->
+                if (key.startsWith("UNIQUE_")) {
+                    // It's a unique video, show as VideoItem
+                    mixedList.add(VideoUiModel.VideoItem(videos[0]))
+                } else {
+                    // It's a Smart Group (Camera, WhatsApp, etc.), show as FolderItem
                     val sortedGroup = sortVideosList(videos)
                     val representative = sortedGroup.firstOrNull()
-                    mixedList.add(VideoUiModel.FolderItem(groupName, videos.size, representative))
-                } else {
-                    mixedList.add(VideoUiModel.VideoItem(videos[0]))
+                    mixedList.add(VideoUiModel.FolderItem(key, videos.size, representative))
                 }
             }
             sortMixedList(mixedList)
             currentUiList.addAll(mixedList)
 
         } else {
+            // --- FLAT LIST (All Videos) ---
             pageTitle?.text = "All Videos"
             btnSort?.setImageResource(R.drawable.ic_sort)
+
             val sortedVideos = sortVideosList(videoList)
             currentUiList.addAll(sortedVideos.map { VideoUiModel.VideoItem(it) })
         }
@@ -219,7 +232,7 @@ class VideosFragment : Fragment() {
 
     private fun updateAdapter() {
         if (!isAdded) return
-        videoAdapter.submitList(ArrayList(currentUiList)) // Submit new list
+        videoAdapter.submitList(ArrayList(currentUiList))
 
         if (currentUiList.isEmpty()) {
             emptyView.visibility = View.VISIBLE
@@ -233,6 +246,7 @@ class VideosFragment : Fragment() {
     private fun handleItemClick(item: VideoUiModel) {
         when (item) {
             is VideoUiModel.VideoItem -> {
+                requireContext().sendBroadcast(Intent(ACTION_VIDEO_STARTED))
                 val intent = Intent(requireContext(), VideoPlayerActivity::class.java).apply {
                     putExtra("VIDEO_ID", item.video.id)
                     putExtra("VIDEO_TITLE", item.video.title)
@@ -245,9 +259,6 @@ class VideosFragment : Fragment() {
         }
     }
 
-    // ... (Sorting helpers, filterVideos, delete logic same as before, simplified for this block) ...
-    // Note: Retaining all the logic methods from previous version but ensuring they call loadVideos/updateAdapter correctly.
-
     private fun sortVideosList(videos: List<Video>): List<Video> {
         return when (currentSortType) {
             MainActivity.SortType.NAME_ASC -> videos.sortedBy { it.title.lowercase() }
@@ -259,20 +270,61 @@ class VideosFragment : Fragment() {
     }
 
     private fun sortMixedList(list: MutableList<VideoUiModel>) {
-        // Implementation similar to previous, using comparators
-        val comparator = Comparator<VideoUiModel> { a, b ->
-            // simplified for brevity, assume full implementation
-            0
-        }
-        // list.sortWith(comparator) // Uncomment if comparator implemented
+        list.sortWith(Comparator { a, b ->
+            val vidA = when (a) {
+                is VideoUiModel.VideoItem -> a.video
+                is VideoUiModel.FolderItem -> a.representative
+            }
+            val vidB = when (b) {
+                is VideoUiModel.VideoItem -> b.video
+                is VideoUiModel.FolderItem -> b.representative
+            }
+
+            val nameA = if (a is VideoUiModel.FolderItem) a.name else vidA?.title ?: ""
+            val nameB = if (b is VideoUiModel.FolderItem) b.name else vidB?.title ?: ""
+
+            when (currentSortType) {
+                MainActivity.SortType.NAME_ASC -> nameA.compareTo(nameB, true)
+                MainActivity.SortType.NAME_DESC -> nameB.compareTo(nameA, true)
+                MainActivity.SortType.DATE_ADDED_ASC -> (vidA?.dateAdded ?: 0).compareTo(vidB?.dateAdded ?: 0)
+                MainActivity.SortType.DATE_ADDED_DESC -> (vidB?.dateAdded ?: 0).compareTo(vidA?.dateAdded ?: 0)
+                MainActivity.SortType.DURATION -> (vidB?.duration ?: 0).compareTo(vidA?.duration ?: 0)
+            }
+        })
     }
 
+    /**
+     * LOGIC UPDATE:
+     * - Returns a Smart Category Name (e.g., "WhatsApp", "Camera") if the file is "Illogical" or generated.
+     * - Returns "UNIQUE_ID" if the file name is unique/logical, so it shows as a single item.
+     */
     private fun getSmartGroupKey(video: Video): String {
-        // Same logic as before
         val title = video.title.trim()
-        if (title.startsWith("VID-WA", true)) return "WhatsApp Videos"
+        val path = video.path.lowercase()
+
+        // 1. WhatsApp
+        if (title.startsWith("VID-", true) && title.contains("WA", true)) return "WhatsApp"
+        if (title.startsWith("WhatsApp", true)) return "WhatsApp"
+        if (path.contains("whatsapp")) return "WhatsApp"
+
+        // 2. Camera (Generated Names)
         if (title.startsWith("VID_", true)) return "Camera"
-        return title // Simplified
+        if (title.startsWith("PXL_", true)) return "Camera" // Pixel
+        if (title.startsWith("DSC_", true)) return "Camera" // Standard
+        if (path.contains("/dcim/camera")) return "Camera"
+
+        // 3. Instagram / Facebook / Snapchat
+        if (title.contains("Instagram", true) || path.contains("instagram")) return "Instagram"
+        if (title.startsWith("FB", true) || title.contains("Facebook", true) || path.contains("facebook")) return "Facebook"
+        if (title.contains("Snapchat", true) || path.contains("snapchat")) return "Snapchat"
+
+        // 4. Telegram
+        if (path.contains("telegram")) return "Telegram"
+
+        // 5. Unique / Logical Names
+        // If it doesn't match a "junk/generated" pattern, treat it as Unique.
+        // We prepend "UNIQUE_" so the generator knows to unwrap it.
+        return "UNIQUE_${video.id}"
     }
 
     private fun filterVideos(query: String) {
@@ -304,11 +356,43 @@ class VideosFragment : Fragment() {
     }
 
     private fun requestDeleteVideo(video: Video) {
-        // Implementation from previous file
+        try {
+            val intentSender = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                val uris = listOf(video.uri)
+                MediaStore.createDeleteRequest(requireContext().contentResolver, uris).intentSender
+            } else {
+                null
+            }
+
+            if (intentSender != null) {
+                val request = IntentSenderRequest.Builder(intentSender).build()
+                deleteResultLauncher.launch(request)
+            } else {
+                Toast.makeText(requireContext(), "Could not request deletion (Android 10-).", Toast.LENGTH_SHORT).show()
+            }
+        } catch (e: SecurityException) {
+            Toast.makeText(requireContext(), "Permission denied.", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun showSortDialog() {
-        // Implementation from previous file
+        val options = arrayOf("Name (A-Z)", "Name (Z-A)", "Date (Newest)", "Date (Oldest)", "Duration")
+        AlertDialog.Builder(requireContext())
+            .setTitle("Sort Videos By")
+            .setItems(options) { _, which ->
+                val newSort = when (which) {
+                    0 -> MainActivity.SortType.NAME_ASC
+                    1 -> MainActivity.SortType.NAME_DESC
+                    2 -> MainActivity.SortType.DATE_ADDED_DESC
+                    3 -> MainActivity.SortType.DATE_ADDED_ASC
+                    4 -> MainActivity.SortType.DURATION
+                    else -> MainActivity.SortType.DATE_ADDED_DESC
+                }
+                currentSortType = newSort
+                PreferenceManager.saveSortPreference(requireContext(), "videos", currentSortType)
+                loadVideos()
+            }
+            .show()
     }
 
     fun refreshData() { if (isAdded) loadVideos() }
@@ -316,11 +400,17 @@ class VideosFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
-        // Register receivers...
         try {
             requireContext().contentResolver.registerContentObserver(
                 MediaStore.Video.Media.EXTERNAL_CONTENT_URI, true, videoContentObserver
             )
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                requireActivity().registerReceiver(searchReceiver, IntentFilter("SEARCH_QUERY_CHANGED"), Context.RECEIVER_NOT_EXPORTED)
+                requireActivity().registerReceiver(sortReceiver, IntentFilter("SORT_VIDEOS"), Context.RECEIVER_NOT_EXPORTED)
+            } else {
+                requireActivity().registerReceiver(searchReceiver, IntentFilter("SEARCH_QUERY_CHANGED"))
+                requireActivity().registerReceiver(sortReceiver, IntentFilter("SORT_VIDEOS"))
+            }
         } catch (e: Exception) {}
         refreshDataPreserveState()
     }
@@ -328,6 +418,10 @@ class VideosFragment : Fragment() {
     override fun onPause() {
         super.onPause()
         try { requireContext().contentResolver.unregisterContentObserver(videoContentObserver) } catch (e: Exception) {}
+        try {
+            requireActivity().unregisterReceiver(searchReceiver)
+            requireActivity().unregisterReceiver(sortReceiver)
+        } catch (e: Exception) {}
         saveScrollState()
     }
 

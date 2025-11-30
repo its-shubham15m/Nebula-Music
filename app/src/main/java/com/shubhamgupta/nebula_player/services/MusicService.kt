@@ -1,8 +1,10 @@
 package com.shubhamgupta.nebula_player.service
 
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.media.MediaPlayer
@@ -53,8 +55,8 @@ class MusicService : Service(), MediaPlayer.OnCompletionListener, MediaPlayer.On
 
     private lateinit var mediaSession: MediaSessionCompat
 
-    // Notification manager
-    private lateinit var notificationManager: MusicNotificationManager
+    // Renamed Notification Manager
+    private lateinit var notificationManager: NebulaNotificationManager
 
     // State saving
     private val saveStateHandler = Handler(Looper.getMainLooper())
@@ -68,6 +70,21 @@ class MusicService : Service(), MediaPlayer.OnCompletionListener, MediaPlayer.On
     private companion object {
         const val CUSTOM_ACTION_TOGGLE_REPEAT = "com.shubhamgupta.nebula_player.ACTION_TOGGLE_REPEAT"
         const val CUSTOM_ACTION_TOGGLE_FAVORITE = "com.shubhamgupta.nebula_player.ACTION_TOGGLE_FAVORITE"
+        const val ACTION_VIDEO_STARTED = "com.shubhamgupta.nebula_player.ACTION_VIDEO_STARTED"
+    }
+
+    // --- FIX: Playback Concurrency Receiver ---
+    private val videoStateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == ACTION_VIDEO_STARTED) {
+                Log.d("MusicService", "Video started, pausing music")
+                if (isPlaying()) {
+                    pause()
+                    // Optional: If you want notification to disappear completely when video starts:
+                    // notificationManager.cancelNotification()
+                }
+            }
+        }
     }
 
     fun getAudioSessionId(): Int {
@@ -109,8 +126,17 @@ class MusicService : Service(), MediaPlayer.OnCompletionListener, MediaPlayer.On
     override fun onCreate() {
         super.onCreate()
 
-        notificationManager = MusicNotificationManager(this)
+        // Use new NebulaNotificationManager
+        notificationManager = NebulaNotificationManager(this)
         notificationManager.createNotificationChannel()
+
+        // Register Video State Receiver
+        val filter = IntentFilter(ACTION_VIDEO_STARTED)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(videoStateReceiver, filter, Context.RECEIVER_EXPORTED)
+        } else {
+            registerReceiver(videoStateReceiver, filter)
+        }
 
         mediaSession = MediaSessionCompat(this, "NebulaMusic").apply {
             setCallback(object : MediaSessionCompat.Callback() {
@@ -150,6 +176,9 @@ class MusicService : Service(), MediaPlayer.OnCompletionListener, MediaPlayer.On
         kotlinx.coroutines.GlobalScope.launch {
             loadSavedPlaybackState()
         }
+
+        // Send a welcome notification/pop-up
+        notificationManager.sendEngagementNotification()
 
         ensureForegroundService()
         startSaveStateUpdates()
@@ -230,6 +259,7 @@ class MusicService : Service(), MediaPlayer.OnCompletionListener, MediaPlayer.On
                 seekTo(position)
             }
             "CLOSE" -> {
+                // User swiped away notification or closed app
                 stopForeground(true)
                 stopSelf()
             }
@@ -253,8 +283,6 @@ class MusicService : Service(), MediaPlayer.OnCompletionListener, MediaPlayer.On
         notificationManager.stopNotificationUpdates()
         when (repeatMode) {
             RepeatMode.ONE -> playCurrentSong()
-            // In both ALL and SHUFFLE, we now just move linearly to the next index
-            // The list itself is already shuffled if mode is SHUFFLE
             RepeatMode.ALL, RepeatMode.SHUFFLE -> playNext("NONE")
         }
     }
@@ -270,15 +298,12 @@ class MusicService : Service(), MediaPlayer.OnCompletionListener, MediaPlayer.On
         this.currentQueue = ArrayList(songs)
         this.currentQueuePosition = safePosition
 
-        // If we start playback and we were in shuffle mode, we behave like professional apps:
-        // Play the clicked song immediately, but shuffle the REST of the queue behind it.
-        // This ensures the "Shuffled" state is maintained but the user gets what they clicked.
         if (isShuffleMode) {
             val clickedSong = songList[safePosition]
             val tempList = ArrayList(songList)
             tempList.remove(clickedSong)
             Collections.shuffle(tempList)
-            tempList.add(0, clickedSong) // Put clicked song at the top
+            tempList.add(0, clickedSong)
 
             songList = tempList
             songPosition = 0
@@ -298,7 +323,6 @@ class MusicService : Service(), MediaPlayer.OnCompletionListener, MediaPlayer.On
     fun playFromQueue(position: Int) {
         if (position in currentQueue.indices) {
             currentQueuePosition = position
-            // Since currentQueue and songList are synced, songPosition is the same
             songPosition = position
 
             playSong()
@@ -353,7 +377,6 @@ class MusicService : Service(), MediaPlayer.OnCompletionListener, MediaPlayer.On
                         ArrayList(originalSongList)
                     }
 
-                    // Restore the exact list that was saved (which is already shuffled if mode was shuffle)
                     songList = ArrayList(currentQueue)
 
                     currentQueuePosition = if (currentQueue.isNotEmpty()) {
@@ -453,18 +476,12 @@ class MusicService : Service(), MediaPlayer.OnCompletionListener, MediaPlayer.On
 
         val currentSong = songList[songPosition]
 
-        // --- Shuffle Logic Update ---
-        // If we are playing a song and we are NOT navigating back through history,
-        // push this song to history.
         if (isShuffleMode && !isNavigatingBack) {
-            // Check if top of stack is different to avoid adjacent duplicates (optional but good)
             if (shuffleHistory.isEmpty() || shuffleHistory.peek() != songPosition) {
                 shuffleHistory.push(songPosition)
             }
         }
-        // Reset the flag immediately so subsequent plays (auto next) are treated as new
         isNavigatingBack = false
-        // -----------------------------
 
         val queueIndex = currentQueue.indexOfFirst { it.id == currentSong.id }
         if (queueIndex != -1 && queueIndex != currentQueuePosition) {
@@ -479,7 +496,6 @@ class MusicService : Service(), MediaPlayer.OnCompletionListener, MediaPlayer.On
                 setOnCompletionListener(this@MusicService)
                 setOnPreparedListener(this@MusicService)
                 setOnErrorListener { _, _, _ ->
-                    // On Error, try next song linearly
                     playNext("NONE")
                     true
                 }
@@ -522,12 +538,14 @@ class MusicService : Service(), MediaPlayer.OnCompletionListener, MediaPlayer.On
     fun pause() {
         if (player?.isPlaying == true) {
             player?.pause()
+            // Update notification to remove "Foreground" status so it can be dismissed
             notificationManager.updateNotification(this, getCurrentSong(), isPlaying(), repeatMode)
             updateMediaSessionState()
             notificationManager.stopNotificationUpdates()
             sendBroadcast(Intent("PLAYBACK_STATE_CHANGED"))
         }
-        ensureForegroundService()
+        // Ensure we don't force foreground if paused
+        if (isPlaying()) ensureForegroundService()
     }
 
     fun togglePlayPause() {
@@ -558,29 +576,24 @@ class MusicService : Service(), MediaPlayer.OnCompletionListener, MediaPlayer.On
 
         isShuffleMode = (repeatMode == RepeatMode.SHUFFLE)
 
-        // Clear history when mode changes to avoid stale indices
         if (!isShuffleMode) {
             shuffleHistory.clear()
         }
 
         val currentSong = getCurrentSong()
         if (isShuffleMode) {
-            // Create a randomized queue, but keep current song playing
-            // This is the FIX for shuffle navigation. We shuffle the list ONCE.
             val tempList = ArrayList(originalSongList)
             currentSong?.let { song ->
                 tempList.remove(song)
                 Collections.shuffle(tempList)
-                tempList.add(0, song) // Put current song at top
+                tempList.add(0, song)
                 songList = tempList
                 songPosition = 0
-                // Add first song to history
                 shuffleHistory.clear()
                 shuffleHistory.push(0)
             } ?: Collections.shuffle(tempList)
 
         } else {
-            // Restore original order
             songList = ArrayList(originalSongList)
             currentSong?.let { song ->
                 val newPosition = songList.indexOfFirst { it.id == song.id }
@@ -588,7 +601,6 @@ class MusicService : Service(), MediaPlayer.OnCompletionListener, MediaPlayer.On
             }
         }
 
-        // Sync queue for display
         currentQueue = ArrayList(songList)
         currentQueuePosition = songPosition
 
@@ -596,7 +608,7 @@ class MusicService : Service(), MediaPlayer.OnCompletionListener, MediaPlayer.On
         updateMediaSessionState()
         notificationManager.updateNotification(this, getCurrentSong(), isPlaying(), repeatMode)
         sendBroadcast(Intent("PLAYBACK_MODE_CHANGED"))
-        sendBroadcast(Intent("QUEUE_CHANGED")) // Notify UI to update queue list
+        sendBroadcast(Intent("QUEUE_CHANGED"))
     }
 
     private fun toggleFavorite() {
@@ -653,7 +665,6 @@ class MusicService : Service(), MediaPlayer.OnCompletionListener, MediaPlayer.On
         }
     }
 
-    // --- Audio Output Switching Support ---
     fun setPreferredAudioDevice(deviceId: Int): Boolean {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && player != null) {
             val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -671,14 +682,12 @@ class MusicService : Service(), MediaPlayer.OnCompletionListener, MediaPlayer.On
         return false
     }
 
-    // --- EXPOSE PREFERRED DEVICE ID ---
     fun getPreferredAudioDevice(): Int? {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && player != null) {
             return player?.preferredDevice?.id
         }
         return null
     }
-    // --------------------------------------
 
     private fun updateMediaSessionMetadata() {
         val currentSong = getCurrentSong() ?: return
@@ -769,6 +778,7 @@ class MusicService : Service(), MediaPlayer.OnCompletionListener, MediaPlayer.On
 
     override fun onDestroy() {
         super.onDestroy()
+        unregisterReceiver(videoStateReceiver) // Unregister logic
         stopSaveStateUpdates()
         notificationManager.stopNotificationUpdates()
         mediaSession.release()
@@ -790,8 +800,6 @@ class MusicService : Service(), MediaPlayer.OnCompletionListener, MediaPlayer.On
                 playCurrentSong()
             }
             RepeatMode.SHUFFLE, RepeatMode.ALL -> {
-                // FIXED: In shuffle mode, we now just move linearly through the ALREADY shuffled queue.
-                // This ensures "Next" and "Previous" are consistent and stable.
                 songPosition = (songPosition + 1) % songList.size
                 currentQueuePosition = songPosition
                 playSong()
@@ -809,7 +817,6 @@ class MusicService : Service(), MediaPlayer.OnCompletionListener, MediaPlayer.On
                 playCurrentSong()
             }
             RepeatMode.SHUFFLE, RepeatMode.ALL -> {
-                // FIXED: Linear navigation backwards through the stable shuffled list
                 songPosition = if (songPosition - 1 < 0) songList.size - 1 else songPosition - 1
                 currentQueuePosition = songPosition
                 playSong()
