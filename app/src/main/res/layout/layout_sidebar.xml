@@ -106,8 +106,6 @@
                 android:layout_height="wrap_content"
                 app:cardCornerRadius="16dp"
                 app:cardElevation="0dp"
-                app:strokeWidth="1dp"
-                app:strokeColor="?attr/colorOutline"
                 app:cardBackgroundColor="@color/colorSurfaceVariant"
                 android:layout_marginBottom="24dp">
 
@@ -237,8 +235,6 @@
                 android:layout_height="wrap_content"
                 app:cardCornerRadius="16dp"
                 app:cardElevation="0dp"
-                app:strokeWidth="1dp"
-                app:strokeColor="?attr/colorOutline"
                 app:cardBackgroundColor="@color/colorSurfaceVariant"
                 android:layout_marginBottom="24dp">
 
@@ -332,8 +328,6 @@
                 android:layout_height="wrap_content"
                 app:cardCornerRadius="16dp"
                 app:cardElevation="0dp"
-                app:strokeWidth="1dp"
-                app:strokeColor="?attr/colorOutline"
                 app:cardBackgroundColor="@color/colorSurfaceVariant">
 
                 <!-- About Item -->
@@ -390,8 +384,6 @@
             android:layout_height="wrap_content"
             app:cardCornerRadius="32dp"
             app:cardElevation="0dp"
-            app:strokeWidth="1dp"
-            app:strokeColor="?attr/colorOutline"
             app:cardBackgroundColor="@color/colorSurfaceVariant"
             android:clickable="true"
             android:focusable="true">
@@ -508,8 +500,8 @@
             android:layout_height="wrap_content"
             android:text="Made with ❤️ by Shubham Gupta"
             android:textSize="12sp"
-            android:textColor="?attr/colorOnSurfaceVariant"
-            android:alpha="0.7"
+            android:textColor="@color/colorOnSurface"
+            android:alpha="0.75"
             android:gravity="center"/>
 
         <TextView
@@ -518,8 +510,8 @@
             android:layout_height="wrap_content"
             tools:text="Version: v1.0.0"
             android:textSize="11sp"
-            android:textColor="?attr/colorOnSurfaceVariant"
-            android:alpha="0.6"
+            android:textColor="@color/colorOnSurface"
+            android:alpha="0.7"
             android:gravity="center"
             android:layout_marginTop="4dp"/>
     </LinearLayout>

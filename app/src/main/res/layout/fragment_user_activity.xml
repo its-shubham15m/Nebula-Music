@@ -29,7 +29,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Your Activity"
-            android:textSize="20sp"
+            android:textSize="24sp"
             android:textStyle="bold"
             android:textColor="?attr/colorOnSurface"
             android:layout_marginStart="16dp"/>
@@ -143,7 +143,7 @@
                     android:layout_marginStart="8dp"
                     app:cardCornerRadius="16dp"
                     app:cardElevation="0dp"
-                    app:cardBackgroundColor="?attr/colorSurfaceVariant">
+                    app:cardBackgroundColor="@color/colorSurfaceVariant">
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -190,9 +190,7 @@
                 android:layout_height="200dp"
                 app:cardCornerRadius="20dp"
                 app:cardElevation="0dp"
-                app:strokeWidth="1dp"
-                app:strokeColor="?attr/colorOutline"
-                app:cardBackgroundColor="?attr/colorSurface">
+                app:cardBackgroundColor="@color/colorSurface">
 
                 <LinearLayout
                     android:id="@+id/chart_container"
@@ -214,7 +212,7 @@
                 android:layout_marginTop="16dp"
                 app:cardCornerRadius="16dp"
                 app:cardElevation="0dp"
-                app:cardBackgroundColor="?attr/colorPrimaryContainer">
+                app:cardBackgroundColor="@color/colorPrimaryContainer">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -233,13 +231,14 @@
                             android:layout_height="wrap_content"
                             android:text="Today's Session"
                             android:textStyle="bold"
-                            android:textColor="?attr/colorOnPrimaryContainer"/>
+                            android:textColor="@color/white"
+                            android:alpha="0.9"/>
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="Keep the streak going!"
                             android:textSize="12sp"
-                            android:textColor="?attr/colorOnPrimaryContainer"
+                            android:textColor="@color/white"
                             android:alpha="0.7"/>
                     </LinearLayout>
 
@@ -250,7 +249,8 @@
                         android:text="45m"
                         android:textSize="18sp"
                         android:textStyle="bold"
-                        android:textColor="?attr/colorOnPrimaryContainer"/>
+                        android:textColor="@color/white"
+                        android:alpha="0.9"/>
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
