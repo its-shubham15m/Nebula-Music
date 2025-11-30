@@ -28,6 +28,7 @@ import com.shubhamgupta.nebula_player.R
 import com.shubhamgupta.nebula_player.models.Song
 import com.shubhamgupta.nebula_player.utils.PreferenceManager
 import com.shubhamgupta.nebula_player.utils.SongUtils
+import java.util.Calendar
 import java.util.Random
 import java.util.concurrent.TimeUnit
 
@@ -88,6 +89,47 @@ class NebulaNotificationManager(private val context: Context) {
             }
             notificationManager.createNotificationChannel(engagementChannel)
         }
+    }
+
+    /**
+     * Sends a welcome notification with a greeting and graphical abstract.
+     * Starts the app like a professional service.
+     */
+    fun sendWelcomeNotification(userName: String) {
+        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+        val greeting = when (hour) {
+            in 5..11 -> "Good Morning"
+            in 12..16 -> "Good Afternoon"
+            in 17..20 -> "Good Evening"
+            else -> "Good Night"
+        }
+
+        val title = "$greeting, $userName"
+        val message = "Ready to dive into your music world?"
+
+        val intent = Intent(context, MainActivity::class.java)
+        val pendingIntent = PendingIntent.getActivity(
+            context, 0, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        // Use default album art as the graphical abstract base if no specific image is available
+        val largeImage = BitmapFactory.decodeResource(context.resources, R.drawable.default_album_art)
+
+        val notification = NotificationCompat.Builder(context, ENGAGEMENT_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_music_note)
+            .setContentTitle(title)
+            .setContentText(message)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            // Graphical Abstract / Big Picture Style
+            .setStyle(NotificationCompat.BigPictureStyle()
+                .bigPicture(largeImage)
+                .setBigContentTitle(title)
+                .setSummaryText("Nebula Player is ready for you."))
+            .build()
+
+        notificationManager.notify(ENGAGEMENT_NOTIFICATION_ID, notification)
     }
 
     /**

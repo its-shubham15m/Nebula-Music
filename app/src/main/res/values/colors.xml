@@ -13,6 +13,7 @@
     <color name="colorPrimaryVariant">#FF3700B3</color>
     <color name="colorSecondary">#FF03DAC5</color>
     <color name="colorSecondaryVariant">#FF018786</color>
+    <color name="colorSurfaceVariant">#E7E9EC</color>
 
     <!-- ADDED: Primary Container Colors -->
     <color name="colorPrimaryContainer">#FF33A1E0</color>

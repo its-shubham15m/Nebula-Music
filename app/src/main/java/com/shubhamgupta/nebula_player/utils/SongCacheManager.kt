@@ -1,9 +1,14 @@
 package com.shubhamgupta.nebula_player.utils
 
 import android.content.Context
+import android.net.Uri
 import android.util.Log
 import com.google.gson.Gson
+import com.google.gson.GsonBuilder
+import com.google.gson.TypeAdapter
 import com.google.gson.reflect.TypeToken
+import com.google.gson.stream.JsonReader
+import com.google.gson.stream.JsonWriter
 import com.shubhamgupta.nebula_player.models.Song
 import com.shubhamgupta.nebula_player.repository.SongRepository
 import kotlinx.coroutines.CoroutineScope
@@ -33,6 +38,26 @@ object SongCacheManager {
     private var lastCacheUpdateTime = 0L
     private const val CACHE_UPDATE_INTERVAL = 5 * 60 * 1000L // 5 minutes
 
+    // --- Gson Setup with Uri Adapter ---
+    // This single instance MUST be used for both Reading and Writing
+    private val gson: Gson by lazy {
+        GsonBuilder()
+            .registerTypeAdapter(Uri::class.java, UriTypeAdapter())
+            .create()
+    }
+
+    private class UriTypeAdapter : TypeAdapter<Uri>() {
+        override fun write(out: JsonWriter, value: Uri?) {
+            out.value(value?.toString())
+        }
+
+        override fun read(input: JsonReader): Uri? {
+            val s = input.nextString()
+            return if (s.isNullOrBlank()) null else Uri.parse(s)
+        }
+    }
+    // -----------------------------------
+
     fun initializeCache(context: Context) {
         if (isCacheInitialized) return
 
@@ -49,26 +74,14 @@ object SongCacheManager {
         }
     }
 
-    /**
-     * Checks if the cache is stale and needs to be updated based on a time interval.
-     * Used by MusicService for background sync.
-     */
     fun shouldUpdateCache(): Boolean {
         return !isCacheInitialized || (System.currentTimeMillis() - lastCacheUpdateTime > CACHE_UPDATE_INTERVAL)
     }
 
-    /**
-     * Bridge method for compatibility.
-     * Redirects to Repository to ensure architectural consistency.
-     */
     fun refreshCache(context: Context) {
         SongRepository.refreshSongs(context)
     }
 
-    /**
-     * Updates the memory cache and persists to disk if changed.
-     * Called by SongRepository after a fetch.
-     */
     suspend fun updateCache(context: Context, newSongs: List<Song>) {
         if (areSongListsDifferent(_allSongs.value, newSongs)) {
             Log.d(TAG, "Diff detected. Updating cache and saving to disk.")
@@ -89,7 +102,6 @@ object SongCacheManager {
         _allSongs.emit(songs)
     }
 
-    // Quick check to avoid unnecessary UI redraws/file writes
     private fun areSongListsDifferent(old: List<Song>, new: List<Song>): Boolean {
         if (old.size != new.size) return true
         val newIds = new.map { it.id }.toSet()
@@ -99,7 +111,8 @@ object SongCacheManager {
 
     private fun saveCacheToFile(context: Context, songs: List<Song>) {
         try {
-            val gson = Gson()
+            // FIX: Use the class-level 'gson' instance (with Uri adapter).
+            // Do NOT use 'Gson()' constructor directly here.
             val jsonString = gson.toJson(songs)
             val cacheFile = File(context.filesDir, SONG_CACHE_FILENAME)
             cacheFile.writeText(jsonString)
@@ -109,13 +122,18 @@ object SongCacheManager {
     }
 
     private fun loadCacheFromFile(context: Context): List<Song>? {
+        val cacheFile = File(context.filesDir, SONG_CACHE_FILENAME)
         try {
-            val cacheFile = File(context.filesDir, SONG_CACHE_FILENAME)
             if (!cacheFile.exists() || cacheFile.readText().isBlank()) return null
             val type = object : TypeToken<List<Song>>() {}.type
-            return Gson().fromJson(cacheFile.readText(), type)
+            // Use the same gson instance to read
+            return gson.fromJson(cacheFile.readText(), type)
         } catch (e: Exception) {
-            Log.e(TAG, "Error loading cache from file", e)
+            Log.e(TAG, "Error loading cache from file. Deleting corrupt file.", e)
+            // Critical Fix: Delete the corrupt file so the app doesn't crash on next run
+            if (cacheFile.exists()) {
+                cacheFile.delete()
+            }
             return null
         }
     }

@@ -17,7 +17,7 @@ android {
         minSdk = 30
         targetSdk = 36
         versionCode = 1
-        versionName = "0.1.3"
+        versionName = "0.1.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         getAndroidVersion()?.let { buildConfigField("boolean", "IS_ANDROID_14_OR_ABOVE", "${it >= 34}") }

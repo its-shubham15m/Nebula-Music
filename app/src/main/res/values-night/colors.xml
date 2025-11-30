@@ -8,6 +8,7 @@
     <color name="colorPrimaryVariant">#FF3700B3</color>
     <color name="colorSecondary">#FF03DAC5</color>
     <color name="colorSecondaryVariant">#FF018786</color>
+    <color name="colorSurfaceVariant">#3A3A3C</color>
 
     <!-- ADDED: Primary Container Colors for Dark Mode -->
     <color name="colorPrimaryContainer">#FF4E56C0</color>

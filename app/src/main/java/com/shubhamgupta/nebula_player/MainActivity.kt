@@ -19,11 +19,14 @@ import android.os.IBinder
 import android.os.Looper
 import android.provider.Settings
 import android.util.Log
+import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.TextView
@@ -43,6 +46,11 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentManager
 import androidx.fragment.app.commit
 import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.LinearSnapHelper
+import androidx.recyclerview.widget.RecyclerView
+import com.bumptech.glide.Glide
+import com.google.android.material.textfield.TextInputEditText
 import com.shubhamgupta.nebula_player.fragments.AboutFragment
 import com.shubhamgupta.nebula_player.fragments.EqualizerFragment
 import com.shubhamgupta.nebula_player.fragments.HomePageFragment
@@ -50,12 +58,17 @@ import com.shubhamgupta.nebula_player.fragments.MiniPlayerFragment
 import com.shubhamgupta.nebula_player.fragments.NowPlayingFragment
 import com.shubhamgupta.nebula_player.fragments.SearchFragment
 import com.shubhamgupta.nebula_player.fragments.SettingsFragment
+import com.shubhamgupta.nebula_player.fragments.UserActivityFragment
 import com.shubhamgupta.nebula_player.service.MusicService
+import com.shubhamgupta.nebula_player.service.NebulaNotificationManager
 import com.shubhamgupta.nebula_player.utils.PreferenceManager
 import com.shubhamgupta.nebula_player.utils.SongUtils
 import com.shubhamgupta.nebula_player.utils.ThemeManager
+import com.shubhamgupta.nebula_player.utils.UserActivityManager
+import com.shubhamgupta.nebula_player.utils.UserProfileManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 
 class MainActivity : AppCompatActivity() {
     private var musicService: MusicService? = null
@@ -81,6 +94,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var themeSystem: RadioButton
     private lateinit var themeLight: RadioButton
     private lateinit var themeDark: RadioButton
+
+    // Setup Temp holder for avatar URI during First Run
+    private var tempAvatarUri: Uri? = null
 
     // Permission handling
     private val requiredPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -346,6 +362,25 @@ class MainActivity : AppCompatActivity() {
         setupBackPressHandler()
         setupDrawerListener()
 
+        // ----------------------------------------------------------------
+        // FEATURE: User Setup (Architecture via UserProfileManager)
+        // ----------------------------------------------------------------
+
+        // 1. Check if setup is already completed using the Manager
+        if (!UserProfileManager.isSetupDone(this)) {
+            // Setup NOT done: Show dialog
+            showFirstTimeSetupDialog()
+        } else {
+            // Setup IS done: Initialize UI and Greet
+            updateSidebarProfile()
+
+            // Only send greeting notification on fresh app launch (not rotation)
+            if (savedInstanceBundle == null) {
+                val userName = UserProfileManager.getUserName(this)
+                NebulaNotificationManager(this).sendWelcomeNotification(userName)
+            }
+        }
+
         try {
             val sidebarVersionTextView = findViewById<TextView>(R.id.sidebar_app_version)
             sidebarVersionTextView?.text = "Version: ${getAppVersionName()}"
@@ -389,6 +424,194 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // New Dialog for First Time User using dialog_user_setup.xml and UserProfileManager
+    // Updated: Horizontal Carousel with Snap and Scale effects, using Manager
+    private fun showFirstTimeSetupDialog() {
+        val builder = AlertDialog.Builder(this)
+
+        // Inflate the custom XML
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_user_setup, null)
+        builder.setView(dialogView)
+        builder.setCancelable(false) // Force user to complete setup
+
+        val dialog = builder.create()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        // 1. Set Title to "Welcome" for First Time Setup
+        val tvTitle = dialogView.findViewById<TextView>(R.id.tv_dialog_title)
+        if (tvTitle != null) {
+            tvTitle.text = "Welcome"
+        }
+
+        val recyclerView = dialogView.findViewById<RecyclerView>(R.id.rv_avatar_picker)
+        val inputName = dialogView.findViewById<TextInputEditText>(R.id.input_user_name)
+        val btnSave = dialogView.findViewById<Button>(R.id.btn_save_setup)
+
+        // Use Manager to get available avatars
+        val avatarList = UserProfileManager.getAvailableAvatars(this)
+        var selectedAvatarPath: String? = avatarList.firstOrNull()
+
+        // --- Horizontal Carousel Logic ---
+        val layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
+        recyclerView.layoutManager = layoutManager
+
+        val snapHelper = LinearSnapHelper()
+        snapHelper.attachToRecyclerView(recyclerView)
+
+        // Padding calculation to center items
+        val displayMetrics = resources.displayMetrics
+        val screenWidth = displayMetrics.widthPixels
+        val itemWidthPx = (100 * displayMetrics.density).toInt() // approx width of item_avatar_selection
+        val padding = (screenWidth - itemWidthPx) / 2 - (48 * displayMetrics.density).toInt() // Adjustment
+        recyclerView.setPadding(padding.coerceAtLeast(0), 0, padding.coerceAtLeast(0), 0)
+        recyclerView.clipToPadding = false
+
+        val adapter = object : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+            override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+                val view = LayoutInflater.from(parent.context).inflate(R.layout.item_avatar_selection, parent, false)
+                return object : RecyclerView.ViewHolder(view) {}
+            }
+
+            override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+                val iv = holder.itemView.findViewById<ImageView>(R.id.iv_avatar_item)
+                val path = avatarList[position]
+
+                Glide.with(this@MainActivity)
+                    .load(Uri.parse(path))
+                    .placeholder(R.drawable.default_album_art)
+                    .error(R.drawable.default_album_art)
+                    .into(iv)
+
+                holder.itemView.setOnClickListener {
+                    recyclerView.smoothScrollToPosition(position)
+                    selectedAvatarPath = path
+                }
+            }
+
+            override fun getItemCount() = avatarList.size
+        }
+        recyclerView.adapter = adapter
+
+        // Visual Effects Scroll Listener (Scale and Dim)
+        recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
+                super.onScrolled(rv, dx, dy)
+                val centerX = rv.width / 2f
+                for (i in 0 until layoutManager.childCount) {
+                    val child = layoutManager.getChildAt(i) ?: continue
+                    val childCenterX = (child.left + child.right) / 2f
+                    val dist = abs(centerX - childCenterX)
+
+                    // Scale: 1.0 -> 1.15 based on proximity to center
+                    val scaleFactor = 1f - (dist / rv.width)
+                    val targetScale = 1.0f + (0.15f * scaleFactor.coerceIn(0f, 1f))
+                    val finalScale = if (dist < 200) targetScale else 1.0f
+
+                    child.scaleX = finalScale
+                    child.scaleY = finalScale
+
+                    // Dimming: Alpha 0.2 at edges, 0.0 at center
+                    val overlay = child.findViewById<View>(R.id.view_overlay)
+                    if (overlay != null) {
+                        val alpha = (dist / 250f).coerceIn(0f, 0.2f)
+                        overlay.alpha = alpha
+                    }
+                }
+            }
+
+            override fun onScrollStateChanged(rv: RecyclerView, newState: Int) {
+                if (newState == RecyclerView.SCROLL_STATE_IDLE) {
+                    val centerView = snapHelper.findSnapView(layoutManager)
+                    if (centerView != null) {
+                        val pos = layoutManager.getPosition(centerView)
+                        if (pos != RecyclerView.NO_POSITION) {
+                            selectedAvatarPath = avatarList[pos]
+                        }
+                    }
+                }
+            }
+        })
+
+        // Initial Trigger to apply effects
+        recyclerView.post {
+            if (avatarList.isNotEmpty()) {
+                recyclerView.scrollBy(1, 0)
+                recyclerView.scrollBy(-1, 0)
+            }
+        }
+
+        // --- Save Logic ---
+        btnSave.setOnClickListener {
+            val rawName = inputName.text.toString()
+            // Save via Manager
+            UserProfileManager.saveUserProfile(this, rawName, selectedAvatarPath)
+
+            // Dismiss and Resume
+            dialog.dismiss()
+
+            // Update UI
+            updateSidebarProfile()
+
+            // Show Greeting
+            val savedName = UserProfileManager.getUserName(this)
+            NebulaNotificationManager(this).sendWelcomeNotification(savedName)
+            Toast.makeText(this, "Welcome, $savedName!", Toast.LENGTH_SHORT).show()
+        }
+
+        dialog.show()
+    }
+
+    // Public method to update sidebar from Settings or Init
+    fun updateSidebarProfile() {
+        // Existing Profile Logic
+        val name = UserProfileManager.getUserName(this)
+        val avatarUriString = UserProfileManager.getUserAvatarUri(this)
+        val sidebarNameView = findViewById<TextView>(R.id.sidebar_user_name)
+        val sidebarAvatarView = findViewById<ImageView>(R.id.sidebar_user_avatar)
+
+        if (sidebarNameView != null) sidebarNameView.text = name
+
+        if (sidebarAvatarView != null) {
+            if (avatarUriString != null) {
+                try {
+                    Glide.with(this)
+                        .load(Uri.parse(avatarUriString))
+                        .placeholder(R.drawable.default_album_art)
+                        .error(R.drawable.default_album_art)
+                        .circleCrop()
+                        .into(sidebarAvatarView)
+                } catch (e: Exception) {
+                    sidebarAvatarView.setImageResource(R.drawable.default_album_art)
+                }
+            } else {
+                sidebarAvatarView.setImageResource(R.drawable.default_album_art)
+            }
+        }
+
+        // --- NEW: User Activity Stats Logic ---
+        val statsView = findViewById<TextView>(R.id.sidebar_user_stats)
+        val streakView = findViewById<TextView>(R.id.sidebar_streak_count)
+
+        if (statsView != null && streakView != null) {
+            // Get data from Manager
+            val formattedTime = UserActivityManager.getFormattedUsageTime(this)
+            val streak = UserActivityManager.getStreak(this)
+
+            // Update UI
+            statsView.text = formattedTime
+            streakView.text = streak.toString()
+        }
+
+        // NEW: Add Click Listener to open Activity History
+        val profileCard = findViewById<View>(R.id.sidebar_user_profile)
+        profileCard?.setOnClickListener {
+            if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
+                drawerLayout.closeDrawer(GravityCompat.START)
+            }
+            showUserActivityPage()
+        }
+    }
+
     // New centralized method to handle state changes based on back stack
     private fun handleBackStackChange() {
         val entryCount = supportFragmentManager.backStackEntryCount
@@ -428,6 +651,11 @@ class MainActivity : AppCompatActivity() {
                     isMiniPlayerAllowed = false
                     setDrawerLocked(true)
                 }
+                "user_activity_page" -> {
+                    currentFragment = "user_activity"
+                    isMiniPlayerAllowed = false
+                    setDrawerLocked(false)
+                }
             }
         }
         updateMiniPlayerVisibility()
@@ -455,19 +683,19 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupSidebarInsets() {
         val sidebar = findViewById<View>(R.id.sidebar)
+        // Adjust footer padding for nav bar
         val sidebarFooterContainer = findViewById<View>(R.id.sidebar_footer_container)
 
         ViewCompat.setOnApplyWindowInsetsListener(sidebar) { v, insets ->
             val systemBarInsets = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            val originalPaddingDp = 16f
-            val originalBottomPaddingPx = (originalPaddingDp * resources.displayMetrics.density).toInt()
-            val newBottomPadding = originalBottomPaddingPx + systemBarInsets.bottom
 
+            // Just ensure footer has padding at bottom
+            val originalBottomPadding = (16 * resources.displayMetrics.density).toInt()
             sidebarFooterContainer.setPadding(
                 sidebarFooterContainer.paddingLeft,
                 sidebarFooterContainer.paddingTop,
                 sidebarFooterContainer.paddingRight,
-                newBottomPadding
+                originalBottomPadding + systemBarInsets.bottom
             )
             insets
         }
@@ -637,6 +865,8 @@ class MainActivity : AppCompatActivity() {
 
             override fun onDrawerOpened(drawerView: View) {
                 addTouchInterceptor()
+                // Update profile every time drawer opens just in case
+                updateSidebarProfile()
             }
 
             override fun onDrawerClosed(drawerView: View) {
@@ -767,6 +997,28 @@ class MainActivity : AppCompatActivity() {
         }, 300)
     }
 
+    // NEW: Helper method to navigate to user activity
+    fun showUserActivityPage() {
+        if (currentFragment == "user_activity") return
+
+        isTransitioning = true
+        currentFragment = "user_activity"
+
+        // Hide mini player
+        setMiniPlayerVisibility(false)
+
+        supportFragmentManager.commit {
+            setCustomAnimations(R.anim.slide_in_right, R.anim.slide_out_left, R.anim.slide_in_left, R.anim.slide_out_right)
+            replace(R.id.fragment_container, UserActivityFragment(), "user_activity_page")
+            setReorderingAllowed(true)
+            addToBackStack("user_activity_page")
+        }
+
+        handler.postDelayed({
+            isTransitioning = false
+        }, 300)
+    }
+
     private fun showHomePageFragment() {
         if (isTransitioning) return
         isTransitioning = true
@@ -849,7 +1101,8 @@ class MainActivity : AppCompatActivity() {
         // Explicitly checking against fragments where we DON'T want it
         val isSettingsOrAboutOrEqualizer = currentFragment == "settings" ||
                 currentFragment == "about" ||
-                currentFragment == "equalizer"
+                currentFragment == "equalizer" ||
+                currentFragment == "user_activity"
 
         val shouldBeVisible = !isSettingsOrAboutOrEqualizer && currentFragment != "now_playing"
 
@@ -973,8 +1226,15 @@ class MainActivity : AppCompatActivity() {
     @SuppressLint("UnsafeImplicitIntentLaunch")
     override fun onResume() {
         super.onResume()
+
+        // 1. Start Tracking Session & Check Streak
+        UserActivityManager.startSession(this)
+
         backPressCount = 0
         handler.postDelayed({ forceRefreshCurrentFragment() }, 800)
+
+        // 2. Refresh sidebar to show new stats immediately
+        updateSidebarProfile()
 
         lifecycleScope.launch {
             delay(1200)
@@ -993,6 +1253,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
+        // 1. End Tracking Session
+        UserActivityManager.endSession(this)
         backPressHandler.removeCallbacks(backPressRunnable)
     }
 
