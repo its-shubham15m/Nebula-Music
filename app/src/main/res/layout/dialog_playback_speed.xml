@@ -28,11 +28,18 @@
             android:layout_marginBottom="24dp"
             android:layout_gravity="center_horizontal"/>
 
-        <LinearLayout
-            android:id="@+id/container_speed_options"
+        <androidx.core.widget.NestedScrollView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical" />
+            android:scrollbars="vertical"
+            android:fadeScrollbars="false">
+
+            <LinearLayout
+                android:id="@+id/container_speed_options"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+        </androidx.core.widget.NestedScrollView>
 
     </LinearLayout>
 </FrameLayout>

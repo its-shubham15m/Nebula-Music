@@ -28,15 +28,24 @@
             android:layout_marginBottom="20dp"
             android:layout_gravity="center_horizontal"/>
 
-        <TextView
-            android:id="@+id/tv_video_info_content"
+        <androidx.core.widget.NestedScrollView
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Loading..."
-            android:textColor="#DDDDDD"
-            android:textSize="14sp"
-            android:lineSpacingExtra="6dp"
-            android:layout_marginBottom="24dp"/>
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:layout_marginBottom="24dp"
+            android:scrollbars="vertical"
+            android:fadeScrollbars="false"
+            android:minHeight="100dp">
+
+            <TextView
+                android:id="@+id/tv_video_info_content"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Loading..."
+                android:textColor="#DDDDDD"
+                android:textSize="14sp"
+                android:lineSpacingExtra="6dp"/>
+        </androidx.core.widget.NestedScrollView>
 
         <Button
             android:id="@+id/btn_info_close"
