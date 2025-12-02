@@ -5,73 +5,72 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="@color/colorBackground"
+    android:background="?attr/colorSurface"
     android:fitsSystemWindows="true">
 
-    <!-- Toolbar -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:paddingVertical="12dp"
+        android:paddingTop="12dp"
+        android:paddingBottom="12dp"
         android:paddingHorizontal="16dp">
 
         <ImageButton
             android:id="@+id/btn_back_activity"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:src="@drawable/ic_back"
             android:background="?attr/selectableItemBackgroundBorderless"
-            app:tint="?attr/colorOnSurface" />
+            app:tint="?attr/colorOnSurface"
+            android:contentDescription="Back" />
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Your Activity"
-            android:textSize="24sp"
+            android:text="Dashboard"
+            android:textSize="20sp"
             android:textStyle="bold"
             android:textColor="?attr/colorOnSurface"
-            android:layout_marginStart="16dp"/>
+            android:layout_marginStart="8dp"/>
     </LinearLayout>
 
     <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
+        android:layout_height="match_parent"
+        android:clipToPadding="false"
+        android:paddingBottom="24dp">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="16dp">
+            android:paddingHorizontal="20dp">
 
-            <!-- Profile Header -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:gravity="center_vertical"
+                android:layout_marginTop="8dp"
                 android:layout_marginBottom="24dp">
 
-                <com.google.android.material.card.MaterialCardView
-                    android:layout_width="72dp"
-                    android:layout_height="72dp"
-                    app:cardCornerRadius="36dp"
-                    app:cardElevation="0dp"
+                <com.google.android.material.imageview.ShapeableImageView
+                    android:id="@+id/img_activity_avatar"
+                    android:layout_width="64dp"
+                    android:layout_height="64dp"
+                    android:src="@drawable/default_album_art"
+                    android:scaleType="centerCrop"
+                    app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.Corner.Full"
                     app:strokeWidth="1dp"
-                    app:strokeColor="?attr/colorOutline">
-                    <ImageView
-                        android:id="@+id/img_activity_avatar"
-                        android:layout_width="match_parent"
-                        android:layout_height="match_parent"
-                        android:src="@drawable/default_album_art"
-                        android:scaleType="centerCrop"/>
-                </com.google.android.material.card.MaterialCardView>
+                    app:strokeColor="?attr/colorOutline"/>
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
                     android:layout_marginStart="16dp">
+
                     <TextView
                         android:id="@+id/tv_activity_name"
                         android:layout_width="wrap_content"
@@ -80,178 +79,212 @@
                         android:textSize="22sp"
                         android:textStyle="bold"
                         android:textColor="?attr/colorOnSurface"/>
-                    <TextView
+
+                    <LinearLayout
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Your listening summary"
-                        android:textSize="14sp"
-                        android:textColor="?attr/colorOnSurfaceVariant"/>
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:background="@drawable/bg_streak_badge"
+                        android:paddingHorizontal="8dp"
+                        android:paddingVertical="4dp"
+                        android:layout_marginTop="4dp">
+
+                        <ImageView
+                            android:layout_width="14dp"
+                            android:layout_height="14dp"
+                            android:src="@drawable/ic_fire"
+                            app:tint="#FF9800"
+                            android:layout_marginEnd="4dp"/>
+
+                        <TextView
+                            android:id="@+id/tv_activity_streak_badge"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="3 Day Streak"
+                            android:textSize="12sp"
+                            android:textStyle="bold"
+                            android:textColor="#FF9800"/>
+                    </LinearLayout>
                 </LinearLayout>
             </LinearLayout>
 
-            <!-- Stats Grid -->
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:cardCornerRadius="28dp"
+                app:cardElevation="0dp"
+                app:strokeWidth="0dp"
+                app:cardBackgroundColor="@color/colorSurfaceVariant">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="24dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical">
+                        <ImageView
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:src="@drawable/ic_time"
+                            app:tint="?attr/colorOnPrimaryContainer"
+                            android:alpha="0.6"/>
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Total Listening Time"
+                            android:textColor="?attr/colorOnPrimaryContainer"
+                            android:alpha="0.7"
+                            android:textSize="14sp"
+                            android:layout_marginStart="8dp"/>
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/tv_activity_total_time"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="0h 0m"
+                        android:textColor="?attr/colorOnPrimaryContainer"
+                        android:textSize="42sp"
+                        android:textStyle="bold"
+                        android:layout_marginTop="8dp"/>
+
+                    <com.google.android.material.divider.MaterialDivider
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        app:dividerColor="?attr/colorOnPrimaryContainer"
+                        android:alpha="0.15"
+                        android:layout_marginVertical="16dp"/>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Today"
+                                android:textColor="?attr/colorOnPrimaryContainer"
+                                android:alpha="0.6"
+                                android:textSize="12sp"/>
+                            <TextView
+                                android:id="@+id/tv_activity_today"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="0m"
+                                android:textColor="?attr/colorOnPrimaryContainer"
+                                android:textStyle="bold"
+                                android:textSize="18sp"/>
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Avg"
+                                android:textColor="?attr/colorOnPrimaryContainer"
+                                android:alpha="0.6"
+                                android:textSize="12sp"/>
+                            <TextView
+                                android:id="@+id/tv_activity_avg"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="-- m"
+                                android:textColor="?attr/colorOnPrimaryContainer"
+                                android:textStyle="bold"
+                                android:textSize="18sp"/>
+                        </LinearLayout>
+                    </LinearLayout>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
-                android:baselineAligned="false"
+                android:gravity="center_vertical"
+                android:layout_marginTop="32dp"
                 android:layout_marginBottom="16dp">
 
-                <!-- Streak Card -->
-                <com.google.android.material.card.MaterialCardView
+                <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:layout_marginEnd="8dp"
-                    app:cardCornerRadius="16dp"
-                    app:cardElevation="0dp"
-                    app:cardBackgroundColor="#1AFF9800">
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:padding="16dp"
-                        android:orientation="vertical"
-                        android:gravity="center">
-                        <ImageView
-                            android:layout_width="24dp"
-                            android:layout_height="24dp"
-                            android:src="@drawable/ic_fire"
-                            app:tint="#FF9800"
-                            android:layout_marginBottom="8dp"/>
-                        <TextView
-                            android:id="@+id/tv_activity_streak"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="3"
-                            android:textSize="24sp"
-                            android:textStyle="bold"
-                            android:textColor="#FF9800"/>
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="Day Streak"
-                            android:textSize="12sp"
-                            android:textColor="#CCFF9800"/>
-                    </LinearLayout>
-                </com.google.android.material.card.MaterialCardView>
+                    android:orientation="vertical">
 
-                <!-- Total Time Card -->
-                <com.google.android.material.card.MaterialCardView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:layout_marginStart="8dp"
-                    app:cardCornerRadius="16dp"
-                    app:cardElevation="0dp"
-                    app:cardBackgroundColor="@color/colorSurfaceVariant">
-                    <LinearLayout
-                        android:layout_width="match_parent"
+                    <TextView
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:padding="16dp"
-                        android:orientation="vertical"
-                        android:gravity="center">
-                        <ImageView
-                            android:layout_width="24dp"
-                            android:layout_height="24dp"
-                            android:src="@drawable/ic_time"
-                            app:tint="?attr/colorPrimary"
-                            android:layout_marginBottom="8dp"/>
-                        <TextView
-                            android:id="@+id/tv_activity_total_time"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="12h"
-                            android:textSize="24sp"
-                            android:textStyle="bold"
-                            android:textColor="?attr/colorOnSurface"/>
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="Total Played"
-                            android:textSize="12sp"
-                            android:textColor="?attr/colorOnSurfaceVariant"/>
-                    </LinearLayout>
-                </com.google.android.material.card.MaterialCardView>
+                        android:text="Trends"
+                        android:textSize="18sp"
+                        android:textStyle="bold"
+                        android:textColor="?attr/colorOnSurface"/>
+
+                    <TextView
+                        android:id="@+id/tv_chart_selected_value"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Select a point"
+                        android:textSize="12sp"
+                        android:textColor="@color/colorOnSurface"
+                        android:alpha="0"
+                        tools:alpha="0.8"/>
+                </LinearLayout>
+
+                <com.google.android.material.button.MaterialButtonToggleGroup
+                    android:id="@+id/toggle_time_range"
+                    android:layout_width="wrap_content"
+                    android:layout_height="36dp"
+                    app:singleSelection="true"
+                    app:selectionRequired="true"
+                    app:checkedButton="@id/btn_range_week">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_range_week"
+                        style="?attr/materialButtonOutlinedStyle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="match_parent"
+                        android:text="Week"
+                        android:textSize="11sp"
+                        android:paddingVertical="0dp"/>
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_range_month"
+                        style="?attr/materialButtonOutlinedStyle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="match_parent"
+                        android:text="Month"
+                        android:textSize="11sp"
+                        android:paddingVertical="0dp"/>
+                </com.google.android.material.button.MaterialButtonToggleGroup>
             </LinearLayout>
-
-            <!-- Weekly Chart Section -->
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="This Week"
-                android:textStyle="bold"
-                android:textSize="16sp"
-                android:textColor="?attr/colorOnSurface"
-                android:layout_marginTop="8dp"
-                android:layout_marginBottom="12dp"/>
 
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
-                android:layout_height="200dp"
+                android:layout_height="wrap_content"
                 app:cardCornerRadius="20dp"
                 app:cardElevation="0dp"
                 app:cardBackgroundColor="@color/colorSurface">
 
-                <LinearLayout
-                    android:id="@+id/chart_container"
+                <com.shubhamgupta.nebula_player.views.TrendChartView
+                    android:id="@+id/trend_chart_view"
                     android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:orientation="horizontal"
-                    android:gravity="bottom"
-                    android:paddingHorizontal="16dp"
-                    android:paddingBottom="16dp"
-                    android:paddingTop="24dp">
-                    <!-- Bars will be added programmatically -->
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
-
-             <!-- Today's Detail -->
-             <com.google.android.material.card.MaterialCardView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="0dp"
-                app:cardBackgroundColor="@color/colorPrimaryContainer">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:padding="16dp"
-                    android:gravity="center_vertical">
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="Today's Session"
-                            android:textStyle="bold"
-                            android:textColor="@color/white"
-                            android:alpha="0.9"/>
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="Keep the streak going!"
-                            android:textSize="12sp"
-                            android:textColor="@color/white"
-                            android:alpha="0.7"/>
-                    </LinearLayout>
-
-                    <TextView
-                        android:id="@+id/tv_activity_today"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="45m"
-                        android:textSize="18sp"
-                        android:textStyle="bold"
-                        android:textColor="@color/white"
-                        android:alpha="0.9"/>
-                </LinearLayout>
+                    android:layout_height="250dp"/>
             </com.google.android.material.card.MaterialCardView>
 
         </LinearLayout>

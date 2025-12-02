@@ -11,41 +11,54 @@ object UserActivityManager {
     private const val KEY_LAST_OPEN_TIMESTAMP = "last_open_timestamp"
     private const val KEY_STREAK_COUNT = "streak_count"
 
-    // Session tracking
     private var sessionStartTime: Long = 0
 
-    /**
-     * Call this in onResume()
-     * Starts the timer and updates the daily streak
-     */
     fun startSession(context: Context) {
         sessionStartTime = System.currentTimeMillis()
         updateStreak(context)
     }
 
-    /**
-     * Call this in onPause()
-     * Calculates the time spent in this session and saves it
-     */
     fun endSession(context: Context) {
         if (sessionStartTime == 0L) return
 
         val currentTime = System.currentTimeMillis()
         val sessionDuration = currentTime - sessionStartTime
 
-        // Prevent negative or tiny glitches
-        if (sessionDuration > 0) {
+        if (sessionDuration > 1000) { // Ignore sessions less than 1 second
             val prefs = getPrefs(context)
+
+            // 1. Save Total Aggregate
             val previousTotal = prefs.getLong(KEY_TOTAL_USAGE_MS, 0L)
             prefs.edit().putLong(KEY_TOTAL_USAGE_MS, previousTotal + sessionDuration).apply()
+
+            // 2. CRITICAL FIX: Log specifically to History for the Graph
+            UserActivityHistory.logSessionDuration(context, sessionDuration)
         }
 
-        sessionStartTime = 0 // Reset
+        sessionStartTime = 0
     }
 
+    // --- Getters ---
+
     /**
-     * Logic to calculate daily streaks
+     * Returns total historical time + current active session time
      */
+    fun getCurrentTotalUsage(context: Context): Long {
+        val prefs = getPrefs(context)
+        val savedTotal = prefs.getLong(KEY_TOTAL_USAGE_MS, 0L)
+
+        // If user is currently in the app, add the live session duration
+        val currentSession = if (sessionStartTime > 0) {
+            System.currentTimeMillis() - sessionStartTime
+        } else 0L
+
+        return savedTotal + currentSession
+    }
+
+    fun getStreak(context: Context): Int {
+        return getPrefs(context).getInt(KEY_STREAK_COUNT, 1)
+    }
+
     private fun updateStreak(context: Context) {
         val prefs = getPrefs(context)
         val lastOpenTime = prefs.getLong(KEY_LAST_OPEN_TIMESTAMP, 0L)
@@ -56,21 +69,15 @@ object UserActivityManager {
         val lastCalendar = getCalendar(lastOpenTime)
 
         if (lastOpenTime == 0L) {
-            // First time ever opening app
             saveStreak(context, 1, now)
             return
         }
 
-        if (isSameDay(todayCalendar, lastCalendar)) {
-            // Already opened today, do nothing to streak
-            return
-        }
+        if (isSameDay(todayCalendar, lastCalendar)) return
 
         if (isYesterday(todayCalendar, lastCalendar)) {
-            // Opened yesterday, increment streak
             saveStreak(context, currentStreak + 1, now)
         } else {
-            // Missed a day (or more), reset streak to 1
             saveStreak(context, 1, now)
         }
     }
@@ -81,28 +88,6 @@ object UserActivityManager {
             .putLong(KEY_LAST_OPEN_TIMESTAMP, timestamp)
             .apply()
     }
-
-    // --- Getters for UI ---
-
-    fun getStreak(context: Context): Int {
-        return getPrefs(context).getInt(KEY_STREAK_COUNT, 1) // Default to 1 if new
-    }
-
-    fun getFormattedUsageTime(context: Context): String {
-        val prefs = getPrefs(context)
-        val totalMs = prefs.getLong(KEY_TOTAL_USAGE_MS, 0L)
-
-        val hours = TimeUnit.MILLISECONDS.toHours(totalMs)
-        val minutes = TimeUnit.MILLISECONDS.toMinutes(totalMs) % 60
-
-        return if (hours > 0) {
-            "${hours}.${(minutes / 6).toString().take(1)}h played" // e.g., "12.5h played"
-        } else {
-            "${minutes}m played" // e.g., "45m played"
-        }
-    }
-
-    // --- Helpers ---
 
     private fun getPrefs(context: Context): SharedPreferences {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -120,7 +105,6 @@ object UserActivityManager {
     }
 
     private fun isYesterday(today: Calendar, previous: Calendar): Boolean {
-        // Clone today so we don't modify the object reference
         val temp = today.clone() as Calendar
         temp.add(Calendar.DAY_OF_YEAR, -1)
         return isSameDay(temp, previous)

@@ -1,31 +1,32 @@
 package com.shubhamgupta.nebula_player.fragments
 
-import android.content.res.ColorStateList
-import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
-import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageButton
 import android.widget.ImageView
-import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import com.bumptech.glide.Glide
+import com.google.android.material.button.MaterialButtonToggleGroup
 import com.shubhamgupta.nebula_player.R
 import com.shubhamgupta.nebula_player.utils.UserActivityHistory
 import com.shubhamgupta.nebula_player.utils.UserActivityManager
 import com.shubhamgupta.nebula_player.utils.UserProfileManager
+import com.shubhamgupta.nebula_player.views.TrendChartView // Import the new View
 
 class UserActivityFragment : Fragment() {
 
+    private lateinit var trendChart: TrendChartView
+    private lateinit var toggleGroup: MaterialButtonToggleGroup
+    private lateinit var selectedValueText: TextView
+
     override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
+        inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
     ): View? {
         return inflater.inflate(R.layout.fragment_user_activity, container, false)
     }
@@ -33,10 +34,52 @@ class UserActivityFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        trendChart = view.findViewById(R.id.trend_chart_view)
+        toggleGroup = view.findViewById(R.id.toggle_time_range)
+        selectedValueText = view.findViewById(R.id.tv_chart_selected_value)
+
         setupToolbar(view)
-        setupProfileHeader(view)
+        setupHeader(view)
         setupStats(view)
-        setupChart(view)
+
+        // Setup Chart Interaction
+        trendChart.setOnPointSelectedListener { label, value ->
+            // Make the UI interactive: Show what user is touching
+            selectedValueText.text = "$label: $value"
+            selectedValueText.animate().alpha(1f).setDuration(200).start()
+
+            // Auto hide after 2 seconds
+            selectedValueText.postDelayed({
+                if (isAdded) selectedValueText.animate().alpha(0f).setDuration(500).start()
+            }, 2000)
+        }
+
+        // Initial Load (Weekly)
+        loadChartData(isWeekly = true)
+
+        toggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
+            if (isChecked) {
+                when (checkedId) {
+                    R.id.btn_range_week -> loadChartData(isWeekly = true)
+                    R.id.btn_range_month -> loadChartData(isWeekly = false)
+                }
+            }
+        }
+    }
+
+    private fun loadChartData(isWeekly: Boolean) {
+        val rawData = if (isWeekly) {
+            UserActivityHistory.getLast7DaysStats(requireContext())
+        } else {
+            UserActivityHistory.getLast4WeeksStats(requireContext())
+        }
+
+        // Convert History Data to Chart Data Pairs
+        val chartPoints = rawData.map {
+            Pair(it.label, it.value)
+        }
+
+        trendChart.setData(chartPoints)
     }
 
     private fun setupToolbar(view: View) {
@@ -45,93 +88,37 @@ class UserActivityFragment : Fragment() {
         }
     }
 
-    private fun setupProfileHeader(view: View) {
-        val nameView = view.findViewById<TextView>(R.id.tv_activity_name)
-        val avatarView = view.findViewById<ImageView>(R.id.img_activity_avatar)
-
-        nameView.text = UserProfileManager.getUserName(requireContext())
+    private fun setupHeader(view: View) {
+        view.findViewById<TextView>(R.id.tv_activity_name).text =
+            UserProfileManager.getUserName(requireContext())
 
         val avatarUri = UserProfileManager.getUserAvatarUri(requireContext())
         if (avatarUri != null) {
-            Glide.with(this)
-                .load(Uri.parse(avatarUri))
-                .placeholder(R.drawable.default_album_art)
-                .circleCrop()
-                .into(avatarView)
+            Glide.with(this).load(Uri.parse(avatarUri)).circleCrop()
+                .into(view.findViewById(R.id.img_activity_avatar))
         }
+
+        val streak = UserActivityManager.getStreak(requireContext())
+        view.findViewById<TextView>(R.id.tv_activity_streak_badge).text = "$streak Day Streak"
     }
 
     private fun setupStats(view: View) {
-        // Streak
-        val streak = UserActivityManager.getStreak(requireContext())
-        view.findViewById<TextView>(R.id.tv_activity_streak).text = streak.toString()
-
         // Total Time
-        val totalTime = UserActivityHistory.getTotalUsageFormatted(requireContext())
-        view.findViewById<TextView>(R.id.tv_activity_total_time).text = totalTime
+        val totalMs = UserActivityManager.getCurrentTotalUsage(requireContext())
+        view.findViewById<TextView>(R.id.tv_activity_total_time).text =
+            UserActivityHistory.formatDuration(totalMs)
 
-        // Today
-        val todayTime = UserActivityHistory.getTodayUsageFormatted(requireContext())
-        view.findViewById<TextView>(R.id.tv_activity_today).text = todayTime
-    }
+        // Today's Time
+        val savedToday = UserActivityHistory.getTodayUsage(requireContext())
+        val currentSession = UserActivityManager.getCurrentTotalUsage(requireContext()) -
+                requireContext().getSharedPreferences("nebula_activity_prefs", 0).getLong("total_usage_ms", 0)
 
-    private fun setupChart(view: View) {
-        val container = view.findViewById<LinearLayout>(R.id.chart_container)
-        val stats = UserActivityHistory.getLast7DaysStats(requireContext())
+        val displayToday = if (currentSession > 0) savedToday + currentSession else savedToday
+        view.findViewById<TextView>(R.id.tv_activity_today).text = UserActivityHistory.formatDuration(displayToday)
 
-        // Dynamically create bars
-        // We use weights to space them evenly
-
-        val primaryColor = getThemeColor(android.R.attr.colorPrimary)
-        val secondaryColor = getThemeColor(R.color.colorSurface)
-
-        for (dayStat in stats) {
-            val barLayout = LinearLayout(context).apply {
-                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f)
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-            }
-
-            // The Bar View
-            val barView = View(context).apply {
-                // Min height 4dp so it's visible even if 0
-                val heightPercent = if (dayStat.relativeHeight < 0.05f) 0.05f else dayStat.relativeHeight
-
-                // Calculate height in dp based on container height (approx 140dp available for bars)
-                val targetHeight = (140 * heightPercent).toInt()
-                val density = resources.displayMetrics.density
-
-                layoutParams = LinearLayout.LayoutParams(
-                    (12 * density).toInt(), // Width of bar
-                    (targetHeight * density).toInt() // Height
-                ).apply {
-                    bottomMargin = (8 * density).toInt()
-                }
-
-                // Highlight today (last item)
-                val isToday = dayStat == stats.last()
-                background = ContextCompat.getDrawable(context, R.drawable.bg_streak_badge)?.mutate()
-                backgroundTintList = ColorStateList.valueOf(if (isToday) primaryColor else 0xFFCCCCCC.toInt())
-            }
-
-            // The Day Label (Mon, Tue...)
-            val labelView = TextView(context).apply {
-                text = dayStat.dateLabel
-                textSize = 10f
-                gravity = Gravity.CENTER
-                setTextColor(Color.GRAY)
-            }
-
-            barLayout.addView(barView)
-            barLayout.addView(labelView)
-
-            container.addView(barLayout)
-        }
-    }
-
-    private fun getThemeColor(attr: Int): Int {
-        val typedValue = android.util.TypedValue()
-        requireContext().theme.resolveAttribute(attr, typedValue, true)
-        return typedValue.data
+        // Average
+        val streak = UserActivityManager.getStreak(requireContext())
+        val avg = if (streak > 0) totalMs / streak else totalMs
+        view.findViewById<TextView>(R.id.tv_activity_avg).text = UserActivityHistory.formatDuration(avg)
     }
 }

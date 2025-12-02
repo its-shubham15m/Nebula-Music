@@ -64,6 +64,7 @@ import com.shubhamgupta.nebula_player.service.NebulaNotificationManager
 import com.shubhamgupta.nebula_player.utils.PreferenceManager
 import com.shubhamgupta.nebula_player.utils.SongUtils
 import com.shubhamgupta.nebula_player.utils.ThemeManager
+import com.shubhamgupta.nebula_player.utils.UserActivityHistory // Added Import
 import com.shubhamgupta.nebula_player.utils.UserActivityManager
 import com.shubhamgupta.nebula_player.utils.UserProfileManager
 import kotlinx.coroutines.delay
@@ -593,12 +594,13 @@ class MainActivity : AppCompatActivity() {
         val streakView = findViewById<TextView>(R.id.sidebar_streak_count)
 
         if (statsView != null && streakView != null) {
-            // Get data from Manager
-            val formattedTime = UserActivityManager.getFormattedUsageTime(this)
+            // FIX: Use formatDuration from UserActivityHistory and raw data from UserActivityManager
+            val totalTime = UserActivityManager.getCurrentTotalUsage(this)
+            val formattedTime = UserActivityHistory.formatDuration(totalTime)
             val streak = UserActivityManager.getStreak(this)
 
             // Update UI
-            statsView.text = formattedTime
+            statsView.text = "$formattedTime played"
             streakView.text = streak.toString()
         }
 

@@ -8,135 +8,124 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 
-/**
- * Manages the historical data of user activity (Daily Usage, Streaks).
- */
 object UserActivityHistory {
     private const val PREFS_NAME = "nebula_activity_history"
-    private const val KEY_DAILY_LOGS = "daily_usage_logs" // Map<String, Long> (Date -> Millis)
+    private const val KEY_DAILY_LOGS = "daily_usage_logs"
 
-    // Helper data class for graph plotting
-    data class DailyStat(
-        val dateLabel: String, // e.g., "Mon"
-        val fullDate: String,  // e.g., "2023-10-25"
-        val durationMs: Long,
-        val relativeHeight: Float // 0.0 to 1.0 for bar graphs
+    data class ChartData(
+        val label: String,
+        val value: Long,
+        val fullDate: String,
+        val heightRatio: Float
     )
 
-    /**
-     * Called by UserActivityManager or directly when a session ends.
-     * Log the duration for Today's date.
-     */
     fun logSessionDuration(context: Context, durationMs: Long) {
         if (durationMs <= 0) return
-
         val prefs = getPrefs(context)
         val logs = getLogs(prefs).toMutableMap()
-
         val todayKey = getTodayKey()
-        val currentDailyTotal = logs[todayKey] ?: 0L
-
-        logs[todayKey] = currentDailyTotal + durationMs
-
+        logs[todayKey] = (logs[todayKey] ?: 0L) + durationMs
         saveLogs(prefs, logs)
     }
 
     /**
-     * Returns a list of stats for the past 7 days (including today).
-     * Used for drawing charts.
+     * Get Last 7 Days (Daily View)
      */
-    fun getLast7DaysStats(context: Context): List<DailyStat> {
-        val prefs = getPrefs(context)
-        val logs = getLogs(prefs)
-
-        val stats = mutableListOf<DailyStat>()
+    fun getLast7DaysStats(context: Context): List<ChartData> {
+        val logs = getLogs(getPrefs(context))
+        val stats = mutableListOf<ChartData>()
         val calendar = Calendar.getInstance()
 
-        // Go back 6 days to start from (Today - 6)
-        calendar.add(Calendar.DAY_OF_YEAR, -6)
+        // Reset to start of today to ensure consistent dates
+        calendar.set(Calendar.HOUR_OF_DAY, 0)
 
-        var maxDuration = 1L // Avoid divide by zero
+        calendar.add(Calendar.DAY_OF_YEAR, -6) // Start 6 days ago
 
-        // 1. Collect raw data
-        val tempStats = mutableListOf<Pair<Calendar, Long>>()
+        var maxVal = 1L
+        val rawData = mutableListOf<Pair<String, Long>>()
+
+        val dayFormat = SimpleDateFormat("EEE", Locale.getDefault())
+
         for (i in 0..6) {
             val dateKey = getDateKey(calendar.time)
-            val duration = logs[dateKey] ?: 0L
-            if (duration > maxDuration) maxDuration = duration
+            val ms = logs[dateKey] ?: 0L
+            if (ms > maxVal) maxVal = ms
 
-            tempStats.add(Pair(calendar.clone() as Calendar, duration))
-            calendar.add(Calendar.DAY_OF_YEAR, 1) // Move to next day
+            val label = if (i == 6) "Today" else dayFormat.format(calendar.time)
+            rawData.add(Pair(label, ms))
+
+            calendar.add(Calendar.DAY_OF_YEAR, 1)
         }
 
-        // 2. Format for UI
-        val dayFormat = SimpleDateFormat("EEE", Locale.getDefault()) // "Mon", "Tue"
-
-        for ((cal, duration) in tempStats) {
-            stats.add(
-                DailyStat(
-                    dateLabel = dayFormat.format(cal.time),
-                    fullDate = getDateKey(cal.time),
-                    durationMs = duration,
-                    relativeHeight = duration.toFloat() / maxDuration.toFloat()
-                )
-            )
+        return rawData.map {
+            ChartData(it.first, it.second, "", it.second.toFloat() / maxVal.toFloat())
         }
-
-        return stats
     }
 
     /**
-     * Get total usage all time formatted string
+     * Get Last 4 Weeks (Weekly View)
+     * Groups daily logs into 7-day chunks.
      */
-    fun getTotalUsageFormatted(context: Context): String {
+    fun getLast4WeeksStats(context: Context): List<ChartData> {
         val logs = getLogs(getPrefs(context))
-        var totalMs = 0L
-        logs.values.forEach { totalMs += it }
-        return formatDuration(totalMs)
+        val stats = mutableListOf<ChartData>()
+        val calendar = Calendar.getInstance()
+
+        var maxVal = 1L
+        val rawData = mutableListOf<Pair<String, Long>>()
+
+        // Loop back 4 weeks
+        for (i in 0 until 4) {
+            var weeklyTotal = 0L
+            // Sum up 7 days
+            for (j in 0 until 7) {
+                val dateKey = getDateKey(calendar.time)
+                weeklyTotal += (logs[dateKey] ?: 0L)
+                calendar.add(Calendar.DAY_OF_YEAR, -1)
+            }
+
+            if (weeklyTotal > maxVal) maxVal = weeklyTotal
+            val label = if (i == 0) "This Week" else "${i}w Ago"
+            rawData.add(0, Pair(label, weeklyTotal)) // Add to front to reverse order
+        }
+
+        return rawData.map {
+            ChartData(it.first, it.second, "", it.second.toFloat() / maxVal.toFloat())
+        }
     }
 
-    /**
-     * Get usage for specifically today
-     */
-    fun getTodayUsageFormatted(context: Context): String {
+    fun getTodayUsage(context: Context): Long {
         val logs = getLogs(getPrefs(context))
-        val ms = logs[getTodayKey()] ?: 0L
-        return formatDuration(ms)
+        return logs[getTodayKey()] ?: 0L
     }
 
-    // --- Private Helpers ---
+    // --- Formatting Helpers ---
 
-    private fun getPrefs(context: Context): SharedPreferences {
-        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    fun formatDuration(ms: Long): String {
+        val hours = TimeUnit.MILLISECONDS.toHours(ms)
+        val minutes = TimeUnit.MILLISECONDS.toMinutes(ms) % 60
+        if (hours == 0L && minutes == 0L && ms > 0) return "< 1m"
+        return if (hours > 0) "${hours}h ${minutes}m" else "${minutes}m"
     }
+
+    // --- Private ---
+
+    private fun getPrefs(context: Context): SharedPreferences =
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     private fun getLogs(prefs: SharedPreferences): Map<String, Long> {
         val json = prefs.getString(KEY_DAILY_LOGS, null) ?: return emptyMap()
-        val type = object : TypeToken<Map<String, Long>>() {}.type
         return try {
-            Gson().fromJson(json, type)
-        } catch (e: Exception) {
-            emptyMap()
-        }
+            Gson().fromJson(json, object : TypeToken<Map<String, Long>>() {}.type)
+        } catch (e: Exception) { emptyMap() }
     }
 
     private fun saveLogs(prefs: SharedPreferences, logs: Map<String, Long>) {
-        val json = Gson().toJson(logs)
-        prefs.edit().putString(KEY_DAILY_LOGS, json).apply()
+        prefs.edit().putString(KEY_DAILY_LOGS, Gson().toJson(logs)).apply()
     }
 
-    private fun getTodayKey(): String {
-        return getDateKey(Date())
-    }
-
-    private fun getDateKey(date: Date): String {
-        return SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(date)
-    }
-
-    private fun formatDuration(ms: Long): String {
-        val hours = java.util.concurrent.TimeUnit.MILLISECONDS.toHours(ms)
-        val minutes = java.util.concurrent.TimeUnit.MILLISECONDS.toMinutes(ms) % 60
-        return "${hours}h ${minutes}m"
-    }
+    private fun getTodayKey() = getDateKey(Date())
+    private fun getDateKey(date: Date) = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(date)
 }
