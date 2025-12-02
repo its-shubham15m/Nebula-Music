@@ -1,6 +1,7 @@
 package com.shubhamgupta.nebula_player
 
 import android.annotation.SuppressLint
+import android.app.Dialog
 import android.app.PictureInPictureParams
 import android.content.Context
 import android.content.pm.ActivityInfo
@@ -8,6 +9,7 @@ import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.Typeface
+import android.graphics.drawable.ColorDrawable
 import android.media.AudioManager
 import android.media.MediaMetadataRetriever
 import android.net.Uri
@@ -17,11 +19,17 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.util.Rational
+import android.util.TypedValue
 import android.view.GestureDetector
+import android.view.Gravity
+import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.View
+import android.view.ViewGroup
+import android.view.Window
 import android.view.WindowManager
+import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.ImageView
@@ -31,7 +39,6 @@ import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.GestureDetectorCompat
 import androidx.core.view.WindowCompat
@@ -342,6 +349,40 @@ class VideoPlayerActivity : AppCompatActivity() {
         }
     }
 
+    // ===============================================
+    // DIALOG HELPER (With Click Outside Fix)
+    // ===============================================
+    private fun createPlayerDialog(layoutId: Int): Pair<Dialog, View> {
+        val dialog = Dialog(this)
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
+
+        val view = LayoutInflater.from(this).inflate(layoutId, null)
+        dialog.setContentView(view)
+
+        // Make window transparent
+        dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+
+        // Ensure dialog fills screen so FrameLayout center/bottom gravity works
+        dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+
+        // CLICK OUTSIDE TO DISMISS LOGIC
+        // We look for the root layout ID 'background_overlay' added to all XMLs
+        view.findViewById<View>(R.id.background_overlay)?.setOnClickListener {
+            dialog.dismiss()
+        }
+
+        return Pair(dialog, view)
+    }
+
+    // ===============================================
+    // FRAGMENT DISMISSAL HELPER
+    // ===============================================
+    // This is called via android:onClick in fragment_subtitle_settings.xml
+    fun dismissSubtitleFragment(view: View) {
+        val fragment = supportFragmentManager.findFragmentByTag("SubtitleSettings") as? androidx.fragment.app.DialogFragment
+        fragment?.dismiss()
+    }
+
     private fun checkResumeStatus() {
         if (hasResumeDialogShown) return
 
@@ -353,25 +394,32 @@ class VideoPlayerActivity : AppCompatActivity() {
             hasResumeDialogShown = true
             p.pause()
 
-            AlertDialog.Builder(this)
-                .setTitle("Resume Video")
-                .setMessage("Resume from ${formatDuration(savedPos)}?")
-                .setPositiveButton("Resume") { _, _ ->
-                    p.seekTo(savedPos)
-                    p.play()
-                    resetAutoHideTimer()
-                }
-                .setNegativeButton("Start Over") { _, _ ->
-                    p.seekTo(0)
-                    p.play()
-                    resetAutoHideTimer()
-                }
-                .setOnCancelListener {
-                    p.seekTo(0)
-                    p.play()
-                    resetAutoHideTimer()
-                }
-                .show()
+            val (dialog, view) = createPlayerDialog(R.layout.dialog_resume_video)
+
+            view.findViewById<TextView>(R.id.tv_resume_message).text = "Resume from ${formatDuration(savedPos)}?"
+
+            view.findViewById<View>(R.id.btn_resume).setOnClickListener {
+                p.seekTo(savedPos)
+                p.play()
+                resetAutoHideTimer()
+                dialog.dismiss()
+            }
+
+            view.findViewById<View>(R.id.btn_start_over).setOnClickListener {
+                p.seekTo(0)
+                p.play()
+                resetAutoHideTimer()
+                dialog.dismiss()
+            }
+
+            dialog.setOnCancelListener {
+                p.seekTo(0)
+                p.play()
+                resetAutoHideTimer()
+            }
+
+            dialog.show()
+
         } else {
             hasResumeDialogShown = true
         }
@@ -516,77 +564,76 @@ class VideoPlayerActivity : AppCompatActivity() {
         super.onUserLeaveHint()
     }
 
-    // ==========================================
-    // FIXED: PIP UI HANDLING
-    // ==========================================
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         if (isInPictureInPictureMode) {
-            // FORCE HIDE ALL CONTROLS
             topControls.visibility = View.GONE
             bottomControls.visibility = View.GONE
-            centerControls.visibility = View.GONE // Hides the big Play/Pause/Next/Prev buttons
-
+            centerControls.visibility = View.GONE
             seekPeekContainer.visibility = View.GONE
             ratioInfoChip.visibility = View.GONE
             lockOverlay.visibility = View.GONE
             centerInfoLayout.visibility = View.GONE
-
-            // Disable the touch overlay so clicks go to the system PiP window
             touchOverlay.visibility = View.GONE
-
             playerView.useController = false
         } else {
-            // Restore UI when returning to full screen
             showSystemUI()
             touchOverlay.visibility = View.VISIBLE
             playerView.useController = false
         }
     }
 
+    // ===============================================
+    // DIALOG IMPLEMENTATIONS (Using createPlayerDialog)
+    // ===============================================
+
     private fun showOrientationDialog() {
-        val options = arrayOf("Landscape", "Portrait", "Sensor (Auto)")
-        AlertDialog.Builder(this)
-            .setTitle("Screen Orientation")
-            .setItems(options) { _, which ->
-                requestedOrientation = when (which) {
-                    0 -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                    1 -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
-                    else -> ActivityInfo.SCREEN_ORIENTATION_SENSOR
-                }
-                resetAutoHideTimer()
-            }
-            .show()
+        val (dialog, view) = createPlayerDialog(R.layout.dialog_orientation)
+
+        view.findViewById<View>(R.id.btn_orient_auto).setOnClickListener {
+            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR
+            resetAutoHideTimer()
+            dialog.dismiss()
+        }
+        view.findViewById<View>(R.id.btn_orient_landscape).setOnClickListener {
+            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            resetAutoHideTimer()
+            dialog.dismiss()
+        }
+        view.findViewById<View>(R.id.btn_orient_portrait).setOnClickListener {
+            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+            resetAutoHideTimer()
+            dialog.dismiss()
+        }
+
+        dialog.show()
     }
 
     private fun showAspectRatioDialog() {
-        val options = arrayOf(
-            "Best Fit (Original)",
-            "Fit Screen",
-            "Fill Screen",
-            "16:9", "4:3", "16:10", "2.35:1 (Cinema)", "2:1", "1:1", "5:4"
-        )
+        val (dialog, view) = createPlayerDialog(R.layout.dialog_aspect_ratio)
 
-        AlertDialog.Builder(this)
-            .setTitle("Aspect Ratio")
-            .setItems(options) { _, which ->
-                when (which) {
-                    0 -> { currentAspectRatioMode = AspectRatioMode.BEST_FIT }
-                    1 -> { currentAspectRatioMode = AspectRatioMode.FIT_SCREEN }
-                    2 -> { currentAspectRatioMode = AspectRatioMode.FILL }
-                    3 -> { currentAspectRatioMode = AspectRatioMode.CUSTOM; currentAspectRatioValue = 16f/9f }
-                    4 -> { currentAspectRatioMode = AspectRatioMode.CUSTOM; currentAspectRatioValue = 4f/3f }
-                    5 -> { currentAspectRatioMode = AspectRatioMode.CUSTOM; currentAspectRatioValue = 16f/10f }
-                    6 -> { currentAspectRatioMode = AspectRatioMode.CUSTOM; currentAspectRatioValue = 2.35f }
-                    7 -> { currentAspectRatioMode = AspectRatioMode.CUSTOM; currentAspectRatioValue = 2f }
-                    8 -> { currentAspectRatioMode = AspectRatioMode.CUSTOM; currentAspectRatioValue = 1f }
-                    9 -> { currentAspectRatioMode = AspectRatioMode.CUSTOM; currentAspectRatioValue = 5f/4f }
-                }
-                PreferenceManager.saveVideoAspectRatioMode(this, which)
+        // Helper to setup clicks
+        fun setMode(id: Int, mode: AspectRatioMode, value: Float = 0f) {
+            view.findViewById<View>(id).setOnClickListener {
+                currentAspectRatioMode = mode
+                currentAspectRatioValue = value
+                PreferenceManager.saveVideoAspectRatioMode(this, AspectRatioMode.values().indexOf(mode))
                 applyAspectRatio()
                 resetAutoHideTimer()
+                dialog.dismiss()
             }
-            .show()
+        }
+
+        setMode(R.id.btn_ar_best_fit, AspectRatioMode.BEST_FIT)
+        setMode(R.id.btn_ar_fit_screen, AspectRatioMode.FIT_SCREEN)
+        setMode(R.id.btn_ar_fill, AspectRatioMode.FILL)
+        setMode(R.id.btn_ar_16_9, AspectRatioMode.CUSTOM, 16f/9f)
+        setMode(R.id.btn_ar_4_3, AspectRatioMode.CUSTOM, 4f/3f)
+        setMode(R.id.btn_ar_16_10, AspectRatioMode.CUSTOM, 16f/10f)
+        setMode(R.id.btn_ar_cinema, AspectRatioMode.CUSTOM, 2.35f)
+        setMode(R.id.btn_ar_18_9, AspectRatioMode.CUSTOM, 2f) // Approx 18:9
+
+        dialog.show()
     }
 
     private fun applyAspectRatio() {
@@ -638,115 +685,158 @@ class VideoPlayerActivity : AppCompatActivity() {
         val p = player ?: return
         val tracks = p.currentTracks
 
-        val audioOptions = mutableListOf<String>()
-        val subOptions = mutableListOf<String>()
-        val audioIndices = mutableListOf<TrackGroupInfo>()
-        val subIndices = mutableListOf<TrackGroupInfo>()
+        val (dialog, view) = createPlayerDialog(R.layout.dialog_audio_subtitle)
+
+        val audioContainer = view.findViewById<LinearLayout>(R.id.container_audio_tracks)
+        val subtitleContainer = view.findViewById<LinearLayout>(R.id.container_subtitle_tracks)
+        val settingsBtn = view.findViewById<View>(R.id.btn_open_sub_settings)
+
+        // Open Subtitle Settings
+        settingsBtn.setOnClickListener {
+            val sheet = SubtitleSettingsFragment()
+            sheet.setOnSettingsChangedListener { applySubtitleSettings() }
+            sheet.show(supportFragmentManager, "SubtitleSettings")
+            dialog.dismiss()
+        }
+
+        // Logic to generate view items for tracks
+        fun createTrackItem(label: String, isSelected: Boolean, onClick: () -> Unit): View {
+            val textView = TextView(this)
+            textView.text = label
+            textView.textSize = 16f
+            textView.setPadding(32, 24, 32, 24)
+            textView.setTextColor(if (isSelected) Color.parseColor("#3EA6FF") else Color.WHITE)
+            textView.setBackgroundResource(TypedValue().let {
+                theme.resolveAttribute(android.R.attr.selectableItemBackground, it, true)
+                it.resourceId
+            })
+            textView.setOnClickListener { onClick() }
+            return textView
+        }
+
+        // --- POPULATE AUDIO ---
+        var hasAudio = false
+        for (groupIndex in 0 until tracks.groups.size) {
+            val group = tracks.groups[groupIndex]
+            if (group.type == C.TRACK_TYPE_AUDIO) {
+                for (trackIndex in 0 until group.length) {
+                    if (group.isTrackSupported(trackIndex)) {
+                        hasAudio = true
+                        val format = group.getTrackFormat(trackIndex)
+                        val lang = format.language?.uppercase() ?: "UND"
+                        val labelStr = "${lang} - ${format.label ?: "Track ${trackIndex + 1}"}"
+                        val isSelected = group.isSelected
+
+                        audioContainer.addView(createTrackItem(labelStr, isSelected) {
+                            p.trackSelectionParameters = p.trackSelectionParameters
+                                .buildUpon()
+                                .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
+                                .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, trackIndex))
+                                .build()
+                            dialog.dismiss()
+                        })
+                    }
+                }
+            }
+        }
+        if (!hasAudio) {
+            val emptyInfo = TextView(this)
+            emptyInfo.text = "No audio tracks found"
+            emptyInfo.setTextColor(Color.GRAY)
+            emptyInfo.setPadding(32,16,32,16)
+            audioContainer.addView(emptyInfo)
+        }
+
+        // --- POPULATE SUBTITLES ---
+        val isSubsDisabled = p.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_TEXT)
+
+        subtitleContainer.addView(createTrackItem("Off", isSubsDisabled) {
+            p.trackSelectionParameters = p.trackSelectionParameters
+                .buildUpon()
+                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+                .build()
+            subtitleView.visibility = View.GONE
+            dialog.dismiss()
+        })
 
         for (groupIndex in 0 until tracks.groups.size) {
             val group = tracks.groups[groupIndex]
-            for (trackIndex in 0 until group.length) {
-                if (group.isTrackSupported(trackIndex)) {
-                    val format = group.getTrackFormat(trackIndex)
-                    val lang = format.language?.uppercase() ?: "UND"
-                    val label = format.label ?: "Track ${trackIndex + 1}"
-                    val info = "${lang} - ${label}"
+            if (group.type == C.TRACK_TYPE_TEXT) {
+                for (trackIndex in 0 until group.length) {
+                    if (group.isTrackSupported(trackIndex)) {
+                        val format = group.getTrackFormat(trackIndex)
+                        val lang = format.language?.uppercase() ?: "UND"
+                        val labelStr = "${lang} - ${format.label ?: "Subtitle ${trackIndex + 1}"}"
+                        val isSelected = group.isSelected && !isSubsDisabled
 
-                    if (group.type == C.TRACK_TYPE_AUDIO) {
-                        audioOptions.add(info)
-                        audioIndices.add(TrackGroupInfo(C.TRACK_TYPE_AUDIO, groupIndex, trackIndex))
-                    } else if (group.type == C.TRACK_TYPE_TEXT) {
-                        subOptions.add(info)
-                        subIndices.add(TrackGroupInfo(C.TRACK_TYPE_TEXT, groupIndex, trackIndex))
+                        subtitleContainer.addView(createTrackItem(labelStr, isSelected) {
+                            p.trackSelectionParameters = p.trackSelectionParameters
+                                .buildUpon()
+                                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                                .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, trackIndex))
+                                .build()
+                            subtitleView.visibility = View.VISIBLE
+                            dialog.dismiss()
+                        })
                     }
                 }
             }
         }
 
-        val displayList = mutableListOf<String>()
-        val actionList = mutableListOf<TrackGroupInfo>()
-
-        if (audioOptions.isNotEmpty()) {
-            displayList.add("  AUDIO TRACKS")
-            actionList.add(TrackGroupInfo(C.TRACK_TYPE_NONE, -1, -1))
-            audioOptions.forEachIndexed { i, s ->
-                displayList.add(s)
-                actionList.add(audioIndices[i])
-            }
-        }
-
-        displayList.add("  SUBTITLES")
-        actionList.add(TrackGroupInfo(C.TRACK_TYPE_NONE, -1, -1))
-
-        displayList.add("Subtitle Settings...")
-        actionList.add(TrackGroupInfo(C.TRACK_TYPE_NONE, -9, -9))
-
-        displayList.add("Disable Subtitles")
-        actionList.add(TrackGroupInfo(C.TRACK_TYPE_TEXT, -2, -2))
-
-        subOptions.forEachIndexed { i, s ->
-            displayList.add(s)
-            actionList.add(subIndices[i])
-        }
-
-        AlertDialog.Builder(this)
-            .setTitle("Select Audio & Subtitles")
-            .setItems(displayList.toTypedArray()) { _, which ->
-                val selection = actionList[which]
-                if (selection.type == C.TRACK_TYPE_NONE && selection.groupIndex == -9) {
-                    val sheet = SubtitleSettingsFragment()
-                    sheet.setOnSettingsChangedListener { applySubtitleSettings() }
-                    sheet.show(supportFragmentManager, "SubtitleSettings")
-                    return@setItems
-                }
-
-                if (selection.type == C.TRACK_TYPE_NONE) return@setItems
-
-                if (selection.groupIndex == -2) {
-                    p.trackSelectionParameters = p.trackSelectionParameters
-                        .buildUpon()
-                        .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
-                        .build()
-                    subtitleView.visibility = View.GONE
-                } else {
-                    val group = tracks.groups[selection.groupIndex]
-                    p.trackSelectionParameters = p.trackSelectionParameters
-                        .buildUpon()
-                        .setTrackTypeDisabled(selection.type, false)
-                        .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, selection.trackIndex))
-                        .build()
-                    if (selection.type == C.TRACK_TYPE_TEXT) subtitleView.visibility = View.VISIBLE
-                }
-                resetAutoHideTimer()
-            }
-            .show()
+        dialog.show()
     }
 
-    data class TrackGroupInfo(val type: Int, val groupIndex: Int, val trackIndex: Int)
-
     private fun showOptionsDialog() {
-        val options = arrayOf("Playback Speed", "Video Information")
-        AlertDialog.Builder(this)
-            .setTitle("Options")
-            .setItems(options) { _, which ->
-                when (which) {
-                    0 -> showPlaybackSpeedDialog()
-                    1 -> showVideoDetails()
-                }
-            }
-            .show()
+        val (dialog, view) = createPlayerDialog(R.layout.dialog_player_options)
+
+        // Show Current Speed
+        val currentSpeed = player?.playbackParameters?.speed ?: 1.0f
+        view.findViewById<TextView>(R.id.txt_current_speed).text = "${currentSpeed}x"
+
+        view.findViewById<View>(R.id.btn_opt_speed).setOnClickListener {
+            dialog.dismiss()
+            showPlaybackSpeedDialog()
+        }
+
+        view.findViewById<View>(R.id.btn_opt_info).setOnClickListener {
+            dialog.dismiss()
+            showVideoDetails()
+        }
+
+        dialog.show()
     }
 
     private fun showPlaybackSpeedDialog() {
-        val speeds = arrayOf("0.5x", "0.75x", "1.0x", "1.25x", "1.5x", "2.0x")
-        val values = floatArrayOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
-        AlertDialog.Builder(this)
-            .setTitle("Playback Speed")
-            .setItems(speeds) { _, which ->
-                player?.setPlaybackSpeed(values[which])
-                resetAutoHideTimer()
+        val (dialog, view) = createPlayerDialog(R.layout.dialog_playback_speed)
+
+        val container = view.findViewById<LinearLayout>(R.id.container_speed_options)
+        val speeds = listOf(0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
+
+        speeds.forEach { speed ->
+            val btn = TextView(this)
+            val text = "${speed}x"
+            btn.text = if (speed == 1.0f) "Normal" else text
+            btn.textSize = 16f
+            btn.setTextColor(Color.WHITE)
+            btn.setPadding(32, 32, 32, 32)
+            btn.gravity = Gravity.CENTER
+            btn.setBackgroundResource(TypedValue().let {
+                theme.resolveAttribute(android.R.attr.selectableItemBackground, it, true)
+                it.resourceId
+            })
+
+            if (player?.playbackParameters?.speed == speed) {
+                btn.setTextColor(Color.parseColor("#3EA6FF"))
+                btn.typeface = Typeface.DEFAULT_BOLD
             }
-            .show()
+
+            btn.setOnClickListener {
+                player?.setPlaybackSpeed(speed)
+                dialog.dismiss()
+            }
+            container.addView(btn)
+        }
+        dialog.show()
     }
 
     private fun showVideoDetails() {
@@ -762,16 +852,17 @@ class VideoPlayerActivity : AppCompatActivity() {
 
                 withContext(Dispatchers.Main) {
                     val info = StringBuilder()
-                    info.append("File: ${cleanTitle(titleView.text.toString())}\n")
-                    info.append("Resolution: ${width}x${height}\n")
-                    info.append("Duration: ${formatDuration(duration)}\n")
-                    if (bitrate > 0) info.append("Bitrate: ${bitrate / 1000} kbps\n")
+                    info.append("File: ${cleanTitle(titleView.text.toString())}\n\n")
+                    info.append("Resolution: ${width} x ${height}\n\n")
+                    info.append("Duration: ${formatDuration(duration)}\n\n")
+                    if (bitrate > 0) info.append("Bitrate: ${bitrate / 1000} kbps")
 
-                    AlertDialog.Builder(this@VideoPlayerActivity)
-                        .setTitle("Video Information")
-                        .setMessage(info.toString())
-                        .setPositiveButton("OK", null)
-                        .show()
+                    val (dialog, view) = createPlayerDialog(R.layout.dialog_video_info)
+                    view.findViewById<TextView>(R.id.tv_video_info_content).text = info.toString()
+                    view.findViewById<View>(R.id.btn_info_close).setOnClickListener {
+                        dialog.dismiss()
+                    }
+                    dialog.show()
                 }
                 retriever.release()
             } catch (e: Exception) { e.printStackTrace() }
@@ -1028,9 +1119,6 @@ class VideoPlayerActivity : AppCompatActivity() {
     }
 
     private fun hideSystemUI() {
-        // FIXED: Removed the check that prevented hiding if in PiP mode.
-        // We WANT to hide everything when in PiP.
-
         WindowCompat.setDecorFitsSystemWindows(window, false)
         val controller = WindowCompat.getInsetsController(window, window.decorView)
         controller.hide(WindowInsetsCompat.Type.systemBars())
@@ -1038,14 +1126,13 @@ class VideoPlayerActivity : AppCompatActivity() {
 
         topControls.visibility = View.GONE
         bottomControls.visibility = View.GONE
-        centerControls.visibility = View.GONE // Ensure center controls are hidden
+        centerControls.visibility = View.GONE
 
         seekPeekContainer.visibility = View.GONE
         ratioInfoChip.visibility = View.GONE
     }
 
     private fun showSystemUI() {
-        // Only show if NOT in PiP
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode) return
 
         topControls.visibility = View.VISIBLE
@@ -1054,7 +1141,6 @@ class VideoPlayerActivity : AppCompatActivity() {
     }
 
     private fun toggleControls() {
-        // Don't toggle controls if in PiP
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode) return
 
         if (topControls.visibility == View.VISIBLE) {

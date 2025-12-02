@@ -51,6 +51,7 @@
             android:src="@drawable/ic_back"
             android:padding="12dp"
             android:layout_marginStart="8dp"
+            android:rotation="-90"
             app:tint="@color/white"
             android:contentDescription="Back" />
 

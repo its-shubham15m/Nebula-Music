@@ -47,17 +47,16 @@
         android:orientation="horizontal"
         android:gravity="center_vertical"
         android:paddingStart="16dp"
-        android:paddingEnd="8dp"
+        android:paddingEnd="16dp"
         android:paddingVertical="8dp">
 
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/shuffle_all_card"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            app:cardCornerRadius="24dp"
-            app:strokeColor="?attr/colorOutline"
-            app:strokeWidth="1dp"
-            app:cardElevation="2dp"
+            app:cardCornerRadius="20dp"
+            app:strokeWidth="0dp"
+            app:cardElevation="0dp"
             app:cardBackgroundColor="@color/shuffle_card_background"
             android:layout_marginEnd="8dp">
 
@@ -67,14 +66,14 @@
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
                 android:paddingStart="16dp"
-                android:paddingEnd="16dp"
-                android:paddingVertical="10dp"
+                android:paddingEnd="20dp"
+                android:paddingVertical="8dp"
                 android:background="?attr/selectableItemBackground">
 
                 <ImageView
                     android:id="@+id/btn_shuffle"
-                    android:layout_width="20dp"
-                    android:layout_height="20dp"
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
                     android:src="@drawable/shuffle"
                     app:tint="?attr/colorOnSurface"
                     android:contentDescription="Shuffle All" />
@@ -83,8 +82,8 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Shuffle All"
-                    android:textSize="16sp"
-                    android:textStyle="normal"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
                     android:textColor="?attr/colorOnSurface"
                     android:layout_marginStart="8dp" />
             </LinearLayout>
@@ -95,19 +94,42 @@
             android:layout_height="0dp"
             android:layout_weight="1"/>
 
-        <com.google.android.material.button.MaterialButton
+        <com.google.android.material.card.MaterialCardView
             android:id="@+id/btn_create_playlist"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Create New"
-            style="@style/Widget.Material3.Button.TonalButton"
-            app:icon="@drawable/ic_add"
-            app:iconTint="?attr/colorOnPrimaryContainer"
-            app:backgroundTint="?attr/colorPrimaryContainer"
-            android:textColor="?attr/colorOnPrimaryContainer"
-            android:paddingStart="16dp"
-            android:paddingEnd="16dp"
-            android:paddingVertical="10dp"/>
+            app:cardCornerRadius="20dp"
+            app:strokeWidth="0dp"
+            app:cardElevation="0dp"
+            app:cardBackgroundColor="@color/shuffle_card_background">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingStart="16dp"
+                android:paddingEnd="20dp"
+                android:paddingVertical="8dp"
+                android:background="@color/colorPrimaryContainer">
+
+                <ImageView
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:src="@drawable/ic_add"
+                    app:tint="@color/white"
+                    android:contentDescription="Create New" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Create New"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/white"
+                    android:layout_marginStart="8dp" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
     </LinearLayout>
 
     <androidx.recyclerview.widget.RecyclerView

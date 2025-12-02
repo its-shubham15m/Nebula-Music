@@ -231,7 +231,7 @@
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingHorizontal="32dp"
-        android:paddingTop="12dp"
+        android:paddingTop="16dp"
         android:paddingBottom="16dp"
         android:visibility="visible"
         android:elevation="20dp">
@@ -281,7 +281,7 @@
         <RelativeLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:paddingHorizontal="4dp"
+            android:paddingHorizontal="8dp"
             android:layout_marginBottom="4dp">
             <TextView
                 android:id="@+id/tv_current_time"
@@ -337,7 +337,7 @@
                 android:layout_marginStart="8dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 app:srcCompat="@drawable/ic_subtitles"
-                android:scaleType="centerInside"
+                android:scaleType="center"
                 android:tint="#FFFFFF"
                 android:padding="8dp"/>
 
