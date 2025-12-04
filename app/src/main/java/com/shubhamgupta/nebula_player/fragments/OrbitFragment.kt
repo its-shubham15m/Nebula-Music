@@ -42,6 +42,11 @@ class OrbitFragment : Fragment() {
     private lateinit var containerVideos: LinearLayout
     private lateinit var cardLastWatched: MaterialCardView
 
+    // Headers to hide/show based on filter
+    private lateinit var headerTimeWarp: TextView
+    private lateinit var headerAiPlaylists: TextView
+    private lateinit var headerVideos: TextView
+
     private var currentFilter = "ALL"
 
     override fun onCreateView(
@@ -71,9 +76,14 @@ class OrbitFragment : Fragment() {
         chipMusic = view.findViewById(R.id.chip_music)
         chipVideo = view.findViewById(R.id.chip_video)
         cardLastWatched = view.findViewById(R.id.card_last_watched)
+
         containerTimeWarp = view.findViewById(R.id.container_time_warp)
         containerAiPlaylists = view.findViewById(R.id.container_echo_chamber)
         containerVideos = view.findViewById(R.id.container_stellar)
+
+        headerTimeWarp = view.findViewById(R.id.tv_time_warp_header)
+        headerAiPlaylists = view.findViewById(R.id.tv_echo_chamber_header)
+        headerVideos = view.findViewById(R.id.tv_stellar_header)
     }
 
     private fun setupInteractions() {
@@ -91,17 +101,42 @@ class OrbitFragment : Fragment() {
         viewModel.isLoading.observe(viewLifecycleOwner) { isLoading ->
             loadingOverlay?.visibility = if (isLoading) View.VISIBLE else View.GONE
         }
+
         viewModel.timeWarpData.observe(viewLifecycleOwner) { items ->
-            if (currentFilter != "VIDEO") populateSongs(containerTimeWarp, items.filterIsInstance<Song>())
+            if (currentFilter != "VIDEO") {
+                headerTimeWarp.visibility = View.VISIBLE
+                (containerTimeWarp.parent as? View)?.visibility = View.VISIBLE
+                populateSongs(containerTimeWarp, items.filterIsInstance<Song>())
+            } else {
+                headerTimeWarp.visibility = View.GONE
+                (containerTimeWarp.parent as? View)?.visibility = View.GONE
+            }
         }
+
         viewModel.aiPlaylists.observe(viewLifecycleOwner) { playlists ->
-            if (currentFilter != "VIDEO") populateAiPlaylists(containerAiPlaylists, playlists)
+            if (currentFilter != "VIDEO") {
+                headerAiPlaylists.visibility = View.VISIBLE
+                (containerAiPlaylists.parent as? View)?.visibility = View.VISIBLE
+                populateAiPlaylists(containerAiPlaylists, playlists)
+            } else {
+                headerAiPlaylists.visibility = View.GONE
+                (containerAiPlaylists.parent as? View)?.visibility = View.GONE
+            }
         }
+
         viewModel.videosData.observe(viewLifecycleOwner) { videos ->
-            if (currentFilter != "MUSIC") populateVideos(containerVideos, videos)
+            if (currentFilter != "MUSIC") {
+                headerVideos.visibility = View.VISIBLE
+                (containerVideos.parent as? View)?.visibility = View.VISIBLE
+                populateVideos(containerVideos, videos)
+            } else {
+                headerVideos.visibility = View.GONE
+                (containerVideos.parent as? View)?.visibility = View.GONE
+            }
         }
+
         viewModel.lastWatchedData.observe(viewLifecycleOwner) { video ->
-            if (video != null && currentFilter != "MUSIC") {
+            if (video != null && currentFilter == "VIDEO") {
                 cardLastWatched.visibility = View.VISIBLE
                 view?.findViewById<TextView>(R.id.tv_last_watched_title)?.text = video.title
                 val img = view?.findViewById<ImageView>(R.id.img_last_watched_thumb)
@@ -180,7 +215,6 @@ class OrbitFragment : Fragment() {
     }
 
     private fun openPlaylistDetails(card: OrbitViewModel.OrbitCard) {
-        // Pass title, mood, tagline, and image path to the fragment
         val fragment = OrbitPlaylistFragment.newInstance(
             title = card.title,
             mood = card.queryMood,
@@ -213,11 +247,28 @@ class OrbitFragment : Fragment() {
 
     private fun updateFilter(filter: String) {
         currentFilter = filter
-        val activeColor = ContextCompat.getColor(requireContext(), R.color.colorSecondary)
-        val inactiveColor = ContextCompat.getColor(requireContext(), R.color.colorSurfaceVariant)
-        chipAll.setCardBackgroundColor(if(filter == "ALL") activeColor else inactiveColor)
-        chipMusic.setCardBackgroundColor(if(filter == "MUSIC") activeColor else inactiveColor)
-        chipVideo.setCardBackgroundColor(if(filter == "VIDEO") activeColor else inactiveColor)
-        viewModel.loadOrbitData()
+
+        val activeCardColor = ContextCompat.getColor(requireContext(), R.color.colorSurface)
+        val inactiveCardColor = ContextCompat.getColor(requireContext(), android.R.color.transparent)
+
+        chipAll.setCardBackgroundColor(inactiveCardColor)
+        chipMusic.setCardBackgroundColor(inactiveCardColor)
+        chipVideo.setCardBackgroundColor(inactiveCardColor)
+
+        chipAll.strokeWidth = 0
+        chipMusic.strokeWidth = 0
+        chipVideo.strokeWidth = 0
+
+        val activeChip = when(filter) {
+            "MUSIC" -> chipMusic
+            "VIDEO" -> chipVideo
+            else -> chipAll
+        }
+
+        activeChip.setCardBackgroundColor(activeCardColor)
+        activeChip.strokeWidth = 2
+
+        // Trigger UI update manually to ensure visibility toggles immediately
+        observeViewModel()
     }
 }

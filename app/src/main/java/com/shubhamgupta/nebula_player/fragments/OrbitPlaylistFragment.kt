@@ -72,10 +72,12 @@ class OrbitPlaylistFragment : Fragment() {
     }
 
     private fun setupUI(view: View) {
-        val toolbar = view.findViewById<Toolbar>(R.id.toolbar)
-        toolbar.setNavigationOnClickListener { parentFragmentManager.popBackStack() }
-        toolbar.title = playlistTitle
+        // Fix: Use custom back button instead of Toolbar navigation
+        view.findViewById<View>(R.id.btn_back).setOnClickListener {
+            parentFragmentManager.popBackStack()
+        }
 
+        view.findViewById<TextView>(R.id.tv_toolbar_title).text = playlistTitle
         view.findViewById<TextView>(R.id.tv_playlist_title).text = playlistTitle
 
         // Set Tagline
@@ -97,7 +99,7 @@ class OrbitPlaylistFragment : Fragment() {
         }
 
         // Shuffle Button
-        view.findViewById<View>(R.id.btn_shuffle).setOnClickListener {
+        view.findViewById<View>(R.id.btn_shuffle_card).setOnClickListener {
             if(songList.isNotEmpty()) {
                 val shuffled = ArrayList(songList)
                 shuffled.shuffle()
@@ -105,9 +107,11 @@ class OrbitPlaylistFragment : Fragment() {
             }
         }
 
-        // FAB Play
-        view.findViewById<FloatingActionButton>(R.id.fab_play).setOnClickListener {
-            if(songList.isNotEmpty()) playMusic(songList, 0)
+        // Play All Button
+        view.findViewById<View>(R.id.btn_play_all_card).setOnClickListener {
+            if(songList.isNotEmpty()) {
+                playMusic(songList, 0)
+            }
         }
     }
 
@@ -154,9 +158,6 @@ class OrbitPlaylistFragment : Fragment() {
             } else {
                 view?.findViewById<TextView>(R.id.tv_playlist_stats)?.text = "0 Songs • 0 min"
             }
-
-            // Note: We do NOT overwrite the album art here anymore because
-            // we want the specific Playlist Art from assets, not the first song's art.
         }
 
         viewModel.recommendedArtists.observe(viewLifecycleOwner) { artists ->

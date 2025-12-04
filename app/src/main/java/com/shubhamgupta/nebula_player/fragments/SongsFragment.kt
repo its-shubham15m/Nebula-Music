@@ -114,10 +114,18 @@ class SongsFragment : Fragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
-        val view = inflater.inflate(R.layout.fragment_songs_list, container, false)
-        recyclerView = view.findViewById(R.id.songs_recycler_view)
-        emptyView = view.findViewById(R.id.tv_empty_songs)
+        // CHANGED: Use fragment_home instead of fragment_songs_list
+        val view = inflater.inflate(R.layout.fragment_home, container, false)
+
+        // CHANGED: Use standard recycler_view ID
+        recyclerView = view.findViewById(R.id.recycler_view)
+
+        // CHANGED: Use generic IDs added to fragment_home
+        emptyView = view.findViewById(R.id.tv_empty)
         loadingProgress = view.findViewById(R.id.loading_progress)
+
+        // Set specific empty text for Songs
+        emptyView.text = "No songs found"
 
         setupRecyclerView()
         return view
