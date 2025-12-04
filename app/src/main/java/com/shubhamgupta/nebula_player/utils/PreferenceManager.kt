@@ -69,6 +69,7 @@ object PreferenceManager {
         }
     }
 
+    // Kept private to maintain encapsulation
     private fun getPreferences(context: Context): SharedPreferences {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     }
@@ -469,5 +470,16 @@ object PreferenceManager {
             bgOpacity = prefs.getInt(KEY_SUB_BG_OPACITY, 0), // Default Transparent
             bottomPadding = prefs.getFloat(KEY_SUB_BOTTOM_PADDING, 0.08f)
         )
+    }
+
+    // --- ORBIT AI CACHE (Fix for OrbitViewModel access) ---
+    fun getAiPlaylistJson(context: Context, key: String): String? {
+        val cacheKey = "orbit_ai_$key"
+        return getPreferences(context).getString(cacheKey, null)
+    }
+
+    fun saveAiPlaylistJson(context: Context, key: String, json: String) {
+        val cacheKey = "orbit_ai_$key"
+        getPreferences(context).edit().putString(cacheKey, json).apply()
     }
 }

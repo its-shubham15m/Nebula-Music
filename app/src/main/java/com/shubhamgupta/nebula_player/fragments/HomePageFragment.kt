@@ -26,7 +26,10 @@ class HomePageFragment : Fragment() {
     private val TAG_AUDIO = "audio_page"
     private val TAG_VIDEO = "video_page"
     private val TAG_SEARCH = "search_page"
-    private val TAG_BROWSE = "browse_page"
+    private val TAG_ORBIT = "orbit_page"
+
+    // Store the current tab ID. Default to Audio.
+    private var currentTabId: Int = R.id.nav_audio
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -41,31 +44,23 @@ class HomePageFragment : Fragment() {
         bottomNavigationView = view.findViewById(R.id.bottom_navigation)
         contentContainer = view.findViewById(R.id.home_content_container)
 
-        // --- FIX START: Handle Window Insets for Bottom Navigation Correctly ---
-        // This ensures the BottomNav gets padding ONLY for the system navigation bar
-        // preventing the "double height" or "black bar" interference.
+        // --- Handle Window Insets ---
         ViewCompat.setOnApplyWindowInsetsListener(bottomNavigationView) { v, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            // Apply bottom padding equal to the navigation bar height
             v.updatePadding(bottom = systemBars.bottom)
-            // Return insets so they can be dispatched if needed, but we consumed the bottom aspect for this view
             insets
         }
-        // --- FIX END ---
 
-        // Handle Keyboard (IME) visibility on the root view
+        // Handle Keyboard (IME) visibility
         ViewCompat.setOnApplyWindowInsetsListener(view) { v, insets ->
             val imeVisible = insets.isVisible(WindowInsetsCompat.Type.ime())
             if (imeVisible) {
                 bottomNavigationView.visibility = View.GONE
                 (requireActivity() as? MainActivity)?.setMiniPlayerBottomMargin(0)
             } else {
-                // Only show if it wasn't explicitly hidden by logic (like full screen video)
-                // But for standard keyboard handling, we restore it:
                 if ((requireActivity() as? MainActivity)?.isDrawerLocked() == false) {
                     bottomNavigationView.visibility = View.VISIBLE
                 } else {
-                    // If we are in a specific mode (like deep settings), keep logic consistent
                     bottomNavigationView.visibility = View.VISIBLE
                 }
                 bottomNavigationView.post { updateMiniPlayerPosition() }
@@ -77,12 +72,16 @@ class HomePageFragment : Fragment() {
             updateMiniPlayerPosition()
         }
 
+        // Setup Listener
         bottomNavigationView.setOnItemSelectedListener { item ->
-            handleTabSelection(item.itemId)
+            if (currentTabId != item.itemId) {
+                currentTabId = item.itemId
+                handleTabSelection(item.itemId)
+            }
             true
         }
 
-        // Feature: Handle double-click (Reselection)
+        // Handle double-click (Reselection)
         bottomNavigationView.setOnItemReselectedListener { item ->
             when (item.itemId) {
                 R.id.nav_search -> {
@@ -90,39 +89,34 @@ class HomePageFragment : Fragment() {
                     fragment?.focusSearchInput()
                 }
                 R.id.nav_audio -> {
-                    // If Audio tab is double-clicked, switch to Songs tab inside MusicPage
                     val fragment = childFragmentManager.findFragmentByTag(TAG_AUDIO) as? MusicPageFragment
                     fragment?.switchToSongsTab()
                 }
             }
         }
 
-        val currentNavFragment = childFragmentManager.primaryNavigationFragment
-        if (currentNavFragment != null) {
-            activeFragment = currentNavFragment
-            val targetTabId = when (currentNavFragment.tag) {
-                TAG_VIDEO -> R.id.nav_video
-                TAG_SEARCH -> R.id.nav_search
-                TAG_BROWSE -> R.id.nav_browse
-                TAG_AUDIO -> R.id.nav_audio
-                else -> bottomNavigationView.selectedItemId
-            }
+        // Restore state if available
+        if (savedInstanceState != null) {
+            currentTabId = savedInstanceState.getInt("LAST_SELECTED_TAB", R.id.nav_audio)
+        }
 
-            if (bottomNavigationView.selectedItemId != targetTabId) {
-                bottomNavigationView.selectedItemId = targetTabId
-            }
-        } else {
-            if (savedInstanceState == null) {
-                handleTabSelection(R.id.nav_audio)
-            }
+        // FIX: Manually load the fragment for the current tab.
+        // We do this explicitly because setting 'selectedItemId' below might NOT trigger
+        // the listener if the ID is the same as the default (first item), causing a black screen.
+        handleTabSelection(currentTabId)
+
+        // Sync the visual state of the BottomNavigation
+        if (bottomNavigationView.selectedItemId != currentTabId) {
+            bottomNavigationView.selectedItemId = currentTabId
         }
     }
 
-    private fun handleTabSelection(itemId: Int) {
-        if (childFragmentManager.backStackEntryCount > 0) {
-            childFragmentManager.popBackStack(null, androidx.fragment.app.FragmentManager.POP_BACK_STACK_INCLUSIVE)
-        }
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putInt("LAST_SELECTED_TAB", currentTabId)
+    }
 
+    private fun handleTabSelection(itemId: Int) {
         when (itemId) {
             R.id.nav_audio -> {
                 switchFragment(TAG_AUDIO) { MusicPageFragment.newInstance() }
@@ -132,7 +126,6 @@ class HomePageFragment : Fragment() {
             R.id.nav_video -> {
                 switchFragment(TAG_VIDEO) { VideosFragment() }
                 setMiniPlayerVisible(false)
-                // RESTRICT SIDEBAR: Locked for Videos as requested
                 (requireActivity() as? MainActivity)?.setDrawerLocked(true)
             }
             R.id.nav_search -> {
@@ -140,8 +133,8 @@ class HomePageFragment : Fragment() {
                 setMiniPlayerVisible(true)
                 (requireActivity() as? MainActivity)?.setDrawerLocked(true)
             }
-            R.id.nav_browse -> {
-                switchFragment(TAG_BROWSE) { BrowseFragment() }
+            R.id.nav_orbit -> {
+                switchFragment(TAG_ORBIT) { OrbitFragment() }
                 setMiniPlayerVisible(true)
                 (requireActivity() as? MainActivity)?.setDrawerLocked(true)
             }
@@ -178,6 +171,8 @@ class HomePageFragment : Fragment() {
 
     private fun switchFragment(tag: String, createFragment: () -> Fragment) {
         val transaction = childFragmentManager.beginTransaction()
+
+        // Hide the current active fragment if it exists
         activeFragment?.let { transaction.hide(it) }
 
         var targetFragment = childFragmentManager.findFragmentByTag(tag)
@@ -197,12 +192,8 @@ class HomePageFragment : Fragment() {
 
     fun updateMiniPlayerPosition() {
         if (bottomNavigationView.visibility == View.VISIBLE) {
-            // We need to account for the padding we added for the system bars
             val height = bottomNavigationView.measuredHeight
-            // Standard margin above the nav bar
             val offsetPx = (4 * resources.displayMetrics.density).toInt()
-
-            // If the height is reported as 0 (not laid out yet), retry logic handles it via post()
             val margin = if (height > 0) height + offsetPx else offsetPx
             (requireActivity() as? MainActivity)?.setMiniPlayerBottomMargin(margin)
         } else {
@@ -210,23 +201,12 @@ class HomePageFragment : Fragment() {
         }
     }
 
-    // UPDATED: Handle Back Press to support Folder Navigation
     fun handleBackPress(): Boolean {
-        // 1. Check back stack (Favorites, Playlists, etc.)
         if (childFragmentManager.backStackEntryCount > 0) {
             childFragmentManager.popBackStack()
-            childFragmentManager.addOnBackStackChangedListener(object : androidx.fragment.app.FragmentManager.OnBackStackChangedListener {
-                override fun onBackStackChanged() {
-                    if (childFragmentManager.backStackEntryCount == 0) {
-                        handleTabSelection(bottomNavigationView.selectedItemId)
-                    }
-                    childFragmentManager.removeOnBackStackChangedListener(this)
-                }
-            })
             return true
         }
 
-        // 2. Check if VideosFragment needs to handle back (Folder navigation)
         val videoFragment = childFragmentManager.findFragmentByTag(TAG_VIDEO) as? VideosFragment
         if (videoFragment != null && videoFragment.isVisible && videoFragment.handleBackPress()) {
             return true
@@ -251,11 +231,13 @@ class HomePageFragment : Fragment() {
 
     fun refreshData() {
         val activeFragment = childFragmentManager.findFragmentById(R.id.home_content_container)
-        if (activeFragment is MusicPageFragment) activeFragment.refreshData()
-        else if (activeFragment is VideosFragment) activeFragment.refreshData()
-        else if (activeFragment is FavoritesFragment) activeFragment.refreshData()
-        else if (activeFragment is PlaylistsFragment) activeFragment.refreshData()
-        else if (activeFragment is RecentFragment) activeFragment.refreshData()
+        when (activeFragment) {
+            is MusicPageFragment -> activeFragment.refreshData()
+            is VideosFragment -> activeFragment.refreshData()
+            is FavoritesFragment -> activeFragment.refreshData()
+            is PlaylistsFragment -> activeFragment.refreshData()
+            is RecentFragment -> activeFragment.refreshData()
+        }
     }
 
     fun switchToTab(tabId: Int) {

@@ -1,4 +1,5 @@
-import com.android.build.api.dsl.Packaging
+import java.util.Properties
+import java.io.FileInputStream
 
 plugins {
     alias(libs.plugins.android.application)
@@ -7,6 +8,21 @@ plugins {
     id("kotlin-kapt")
     id("kotlin-parcelize")
 }
+
+// --- SECRETS MANAGEMENT START ---
+// Load local.properties file to get secrets
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    // FIX: Using imported FileInputStream instead of java.io.FileInputStream
+    localProperties.load(FileInputStream(localPropertiesFile))
+}
+
+// Helper to get secrets safely
+fun getSecret(key: String): String {
+    return localProperties.getProperty(key) ?: ""
+}
+// --- SECRETS MANAGEMENT END ---
 
 android {
     namespace = "com.shubhamgupta.nebula_player"
@@ -20,7 +36,12 @@ android {
         versionName = "0.1.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
         getAndroidVersion()?.let { buildConfigField("boolean", "IS_ANDROID_14_OR_ABOVE", "${it >= 34}") }
+
+        // --- INJECT SECRETS INTO BUILDCONFIG ---
+        val geminiKey = getSecret("GEMINI_API_KEY")
+        buildConfigField("String", "GEMINI_API_KEY", "\"$geminiKey\"")
     }
 
     buildTypes {
@@ -56,7 +77,7 @@ android {
         buildConfig = true
     }
 
-    fun Packaging.() {
+    packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
             excludes += "META-INF/DEPENDENCIES"
@@ -85,6 +106,7 @@ dependencies {
     implementation("androidx.recyclerview:recyclerview:1.3.2")
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.palette.ktx)
+    implementation(libs.androidx.browser)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -125,4 +147,7 @@ dependencies {
     // --- RETROFIT FOR LYRICS API ---
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+
+    // Google Generative AI (Gemini)
+    implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
 }

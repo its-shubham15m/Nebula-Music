@@ -1,5 +1,6 @@
 package com.shubhamgupta.nebula_player.utils
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.ContentUris
 import android.content.ContentResolver
@@ -8,6 +9,7 @@ import android.media.MediaMetadataRetriever
 import android.provider.OpenableColumns
 import com.shubhamgupta.nebula_player.R
 import com.shubhamgupta.nebula_player.models.Song
+import java.util.concurrent.TimeUnit
 
 object SongUtils {
 
@@ -47,10 +49,10 @@ object SongUtils {
             val rawTitle = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
             val rawArtist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
             val rawAlbum = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM)
-            val rawYear = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_YEAR) // ADDED: Extract Year
-            val rawGenre = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_GENRE) // ADDED: Extract Genre
+            val rawYear = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_YEAR)
+            val rawGenre = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_GENRE)
             val durationStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
-            val embeddedPictureBytes = retriever.embeddedPicture // ADDED: Get embedded picture
+            val embeddedPictureBytes = retriever.embeddedPicture
 
             val durationMs = durationStr?.toLongOrNull() ?: 0L
             // Use a hash of the URI as a temporary unique ID
@@ -64,13 +66,13 @@ object SongUtils {
                 title = title.trim(),
                 artist = rawArtist ?: "Unknown Artist",
                 album = rawAlbum ?: "External",
-                genre = rawGenre, // ADDED: Include Genre
-                year = rawYear, // ADDED: Include Year
+                genre = rawGenre,
+                year = rawYear,
                 path = uri.toString(),
                 duration = durationMs,
                 albumId = 0, // Album ID remains 0 for external files
                 uri = uri,
-                embeddedArtBytes = embeddedPictureBytes // ADDED: Include embedded art bytes
+                embeddedArtBytes = embeddedPictureBytes
             )
         } catch (e: Exception) {
             e.printStackTrace()
@@ -80,16 +82,13 @@ object SongUtils {
         }
     }
 
-    // 🌟 NEW FUNCTION: Dedicated method to retrieve embedded album art bytes (the fix for this issue)
     /**
      * Retrieves the embedded picture bytes (album art) from the audio file specified by the URI.
-     * This data should be loaded by the UI components (e.g., NowPlayingFragment) using Glide/BitmapFactory.
      */
     fun getEmbeddedPictureBytes(context: Context, uri: Uri): ByteArray? {
         val retriever = MediaMetadataRetriever()
         return try {
             retriever.setDataSource(context, uri)
-            // This is the call that extracts the embedded album art
             retriever.embeddedPicture
         } catch (e: Exception) {
             e.printStackTrace()
@@ -97,5 +96,13 @@ object SongUtils {
         } finally {
             retriever.release()
         }
+    }
+
+    // --- ADDED MISSING FUNCTION ---
+    @SuppressLint("DefaultLocale")
+    fun formatDuration(durationMillis: Long): String {
+        val minutes = TimeUnit.MILLISECONDS.toMinutes(durationMillis)
+        val seconds = TimeUnit.MILLISECONDS.toSeconds(durationMillis) % 60
+        return String.format("%02d:%02d", minutes, seconds)
     }
 }

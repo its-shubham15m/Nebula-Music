@@ -1,0 +1,269 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?android:attr/colorBackground">
+
+    <androidx.core.widget.NestedScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true"
+        android:fitsSystemWindows="true"
+        android:clipToPadding="false"
+        android:paddingBottom="120dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="24dp"
+                android:paddingTop="48dp"
+                android:paddingBottom="16dp">
+
+                <TextView
+                    android:id="@+id/tv_orbit_greeting"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Good Afternoon"
+                    android:textSize="32sp"
+                    android:letterSpacing="-0.02"
+                    android:fontFamily="sans-serif-black"
+                    android:textColor="?attr/colorOnSurface" />
+            </LinearLayout>
+
+            <HorizontalScrollView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:scrollbars="none"
+                android:paddingStart="24dp"
+                android:clipToPadding="false"
+                android:layout_marginBottom="32dp">
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.card.MaterialCardView
+                        android:id="@+id/chip_all"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        app:cardCornerRadius="100dp"
+                        app:cardBackgroundColor="?attr/colorOnSurface"
+                        android:layout_marginEnd="8dp"
+                        app:contentPadding="0dp">
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="All"
+                            android:textColor="?attr/colorSurface"
+                            android:paddingHorizontal="24dp"
+                            android:paddingVertical="12dp"
+                            android:textStyle="bold"/>
+                    </com.google.android.material.card.MaterialCardView>
+
+                    <com.google.android.material.card.MaterialCardView
+                        android:id="@+id/chip_music"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        app:cardCornerRadius="100dp"
+                        app:cardBackgroundColor="?attr/colorSurfaceVariant"
+                        android:layout_marginEnd="8dp">
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Music"
+                            android:textColor="?attr/colorOnSurfaceVariant"
+                            android:paddingHorizontal="24dp"
+                            android:paddingVertical="12dp"/>
+                    </com.google.android.material.card.MaterialCardView>
+
+                    <com.google.android.material.card.MaterialCardView
+                        android:id="@+id/chip_video"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        app:cardCornerRadius="100dp"
+                        app:cardBackgroundColor="?attr/colorSurfaceVariant"
+                        android:layout_marginEnd="8dp">
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Videos"
+                            android:textColor="?attr/colorOnSurfaceVariant"
+                            android:paddingHorizontal="24dp"
+                            android:paddingVertical="12dp"/>
+                    </com.google.android.material.card.MaterialCardView>
+                </LinearLayout>
+            </HorizontalScrollView>
+
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/card_last_watched"
+                android:layout_width="match_parent"
+                android:layout_height="220dp"
+                android:layout_marginHorizontal="24dp"
+                android:layout_marginBottom="40dp"
+                app:cardCornerRadius="24dp"
+                app:cardElevation="8dp"
+                android:visibility="gone">
+
+                <FrameLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent">
+
+                    <ImageView
+                        android:id="@+id/img_last_watched_thumb"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:scaleType="centerCrop"
+                        android:src="@drawable/default_album_art"
+                        android:alpha="0.8"/>
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="#40000000"/>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="bottom"
+                        android:padding="24dp"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="CONTINUE WATCHING"
+                            android:textColor="#EEFFFFFF"
+                            android:textSize="11sp"
+                            android:letterSpacing="0.1"
+                            android:textStyle="bold"
+                            android:layout_marginBottom="4dp"/>
+
+                        <TextView
+                            android:id="@+id/tv_last_watched_title"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Video Title"
+                            android:textColor="@android:color/white"
+                            android:textSize="22sp"
+                            android:fontFamily="sans-serif-medium"
+                            android:maxLines="2"
+                            android:ellipsize="end"/>
+                    </LinearLayout>
+
+                    <ImageView
+                        android:layout_width="56dp"
+                        android:layout_height="56dp"
+                        android:src="@drawable/ic_play"
+                        android:layout_gravity="center"
+                        android:padding="12dp"
+                        app:tint="@android:color/black"/>
+                </FrameLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <TextView
+                android:id="@+id/tv_time_warp_header"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Quick Picks"
+                android:textSize="24sp"
+                android:fontFamily="sans-serif-black"
+                android:textColor="?attr/colorOnSurface"
+                android:layout_marginBottom="16dp"
+                android:paddingHorizontal="24dp" />
+
+            <HorizontalScrollView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:scrollbars="none"
+                android:paddingStart="24dp"
+                android:clipToPadding="false"
+                android:layout_marginBottom="40dp">
+
+                <LinearLayout
+                    android:id="@+id/container_time_warp"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal" />
+            </HorizontalScrollView>
+
+            <TextView
+                android:id="@+id/tv_echo_chamber_header"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Recommended for You"
+                android:textSize="24sp"
+                android:fontFamily="sans-serif-black"
+                android:textColor="?attr/colorOnSurface"
+                android:layout_marginBottom="16dp"
+                android:paddingHorizontal="24dp" />
+
+            <HorizontalScrollView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:scrollbars="none"
+                android:paddingStart="24dp"
+                android:clipToPadding="false"
+                android:layout_marginBottom="40dp">
+
+                <LinearLayout
+                    android:id="@+id/container_echo_chamber"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal" />
+            </HorizontalScrollView>
+
+            <TextView
+                android:id="@+id/tv_stellar_header"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Music Videos"
+                android:textSize="24sp"
+                android:fontFamily="sans-serif-black"
+                android:textColor="?attr/colorOnSurface"
+                android:layout_marginBottom="16dp"
+                android:paddingHorizontal="24dp" />
+
+            <HorizontalScrollView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:scrollbars="none"
+                android:paddingStart="24dp"
+                android:clipToPadding="false"
+                android:layout_marginBottom="40dp">
+
+                <LinearLayout
+                    android:id="@+id/container_stellar"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal" />
+            </HorizontalScrollView>
+
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+
+    <FrameLayout
+        android:id="@+id/loading_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#80000000"
+        android:visibility="gone"
+        android:clickable="true"
+        android:focusable="true">
+
+        <ProgressBar
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"/>
+    </FrameLayout>
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>
