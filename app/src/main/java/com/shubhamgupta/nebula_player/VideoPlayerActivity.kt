@@ -29,15 +29,19 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.Window
 import android.view.WindowManager
+import android.view.animation.Animation
+import android.view.animation.TranslateAnimation
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.RadioGroup
 import android.widget.RelativeLayout
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
+import android.widget.ViewFlipper
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.GestureDetectorCompat
@@ -54,7 +58,6 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
-import com.shubhamgupta.nebula_player.fragments.SubtitleSettingsFragment
 import com.shubhamgupta.nebula_player.models.Video
 import com.shubhamgupta.nebula_player.repository.VideoRepository
 import com.shubhamgupta.nebula_player.utils.PreferenceManager
@@ -377,7 +380,6 @@ class VideoPlayerActivity : AppCompatActivity() {
     // ===============================================
     // FRAGMENT DISMISSAL HELPER
     // ===============================================
-    // This is called via android:onClick in fragment_subtitle_settings.xml
     fun dismissSubtitleFragment(view: View) {
         val fragment = supportFragmentManager.findFragmentByTag("SubtitleSettings") as? androidx.fragment.app.DialogFragment
         fragment?.dismiss()
@@ -687,17 +689,53 @@ class VideoPlayerActivity : AppCompatActivity() {
 
         val (dialog, view) = createPlayerDialog(R.layout.dialog_audio_subtitle)
 
+        // FLIPPER SETUP
+        val viewFlipper = view.findViewById<ViewFlipper>(R.id.view_flipper)
         val audioContainer = view.findViewById<LinearLayout>(R.id.container_audio_tracks)
         val subtitleContainer = view.findViewById<LinearLayout>(R.id.container_subtitle_tracks)
         val settingsBtn = view.findViewById<View>(R.id.btn_open_sub_settings)
 
-        // Open Subtitle Settings
+        // --- DEFINE SLIDE ANIMATIONS PROGRAMMATICALLY ---
+        // Right-To-Left (Enter Subtitle Settings)
+        val inFromRight = TranslateAnimation(
+            Animation.RELATIVE_TO_PARENT, 1.0f,
+            Animation.RELATIVE_TO_PARENT, 0.0f,
+            Animation.RELATIVE_TO_PARENT, 0.0f,
+            Animation.RELATIVE_TO_PARENT, 0.0f
+        ).apply { duration = 300 }
+
+        val outToLeft = TranslateAnimation(
+            Animation.RELATIVE_TO_PARENT, 0.0f,
+            Animation.RELATIVE_TO_PARENT, -1.0f,
+            Animation.RELATIVE_TO_PARENT, 0.0f,
+            Animation.RELATIVE_TO_PARENT, 0.0f
+        ).apply { duration = 300 }
+
+        // Left-To-Right (Back to Tracks)
+        val inFromLeft = TranslateAnimation(
+            Animation.RELATIVE_TO_PARENT, -1.0f,
+            Animation.RELATIVE_TO_PARENT, 0.0f,
+            Animation.RELATIVE_TO_PARENT, 0.0f,
+            Animation.RELATIVE_TO_PARENT, 0.0f
+        ).apply { duration = 300 }
+
+        val outToRight = TranslateAnimation(
+            Animation.RELATIVE_TO_PARENT, 0.0f,
+            Animation.RELATIVE_TO_PARENT, 1.0f,
+            Animation.RELATIVE_TO_PARENT, 0.0f,
+            Animation.RELATIVE_TO_PARENT, 0.0f
+        ).apply { duration = 300 }
+
+        // Open Subtitle Settings (Slide In)
         settingsBtn.setOnClickListener {
-            val sheet = SubtitleSettingsFragment()
-            sheet.setOnSettingsChangedListener { applySubtitleSettings() }
-            sheet.show(supportFragmentManager, "SubtitleSettings")
-            dialog.dismiss()
+            viewFlipper.inAnimation = inFromRight
+            viewFlipper.outAnimation = outToLeft
+            viewFlipper.showNext()
         }
+
+        // ============================================================
+        //  PAGE 1: TRACKS LOGIC
+        // ============================================================
 
         // Logic to generate view items for tracks
         fun createTrackItem(label: String, isSelected: Boolean, onClick: () -> Unit): View {
@@ -781,6 +819,85 @@ class VideoPlayerActivity : AppCompatActivity() {
                     }
                 }
             }
+        }
+
+        // ============================================================
+        //  PAGE 2: SETTINGS LOGIC
+        // ============================================================
+
+        var settings = PreferenceManager.getSubtitleSettings(this)
+
+        // --- Controls ---
+        val seekSize = view.findViewById<SeekBar>(R.id.seek_font_size)
+        val rgColor = view.findViewById<RadioGroup>(R.id.rg_text_color)
+        val rgOpacity = view.findViewById<RadioGroup>(R.id.rg_opacity)
+        val seekPos = view.findViewById<SeekBar>(R.id.seek_position)
+        val btnBack = view.findViewById<Button>(R.id.btn_back_to_tracks)
+
+        // --- Init Values ---
+        seekSize.progress = settings.fontSize
+        seekPos.progress = (settings.bottomPadding * 100).toInt()
+
+        // Init Color Selection
+        when(settings.textColor) {
+            Color.WHITE -> rgColor.check(R.id.tc_white)
+            Color.YELLOW -> rgColor.check(R.id.tc_yellow)
+            Color.CYAN -> rgColor.check(R.id.tc_cyan)
+            Color.GREEN -> rgColor.check(R.id.tc_green)
+            else -> rgColor.check(R.id.tc_white)
+        }
+
+        // Init Opacity Selection
+        when(settings.bgOpacity) {
+            0 -> rgOpacity.check(R.id.btn_op_0)
+            25 -> rgOpacity.check(R.id.btn_op_25)
+            50 -> rgOpacity.check(R.id.btn_op_50)
+            75 -> rgOpacity.check(R.id.btn_op_75)
+            100 -> rgOpacity.check(R.id.btn_op_100)
+            else -> rgOpacity.check(R.id.btn_op_0)
+        }
+
+        // --- Listeners ---
+        seekSize.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(s: SeekBar?, p: Int, f: Boolean) { settings = settings.copy(fontSize = p.coerceAtLeast(10)) }
+            override fun onStartTrackingTouch(s: SeekBar?) {}
+            override fun onStopTrackingTouch(s: SeekBar?) {}
+        })
+
+        seekPos.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(s: SeekBar?, p: Int, f: Boolean) { settings = settings.copy(bottomPadding = p / 100f) }
+            override fun onStartTrackingTouch(s: SeekBar?) {}
+            override fun onStopTrackingTouch(s: SeekBar?) {}
+        })
+
+        rgColor.setOnCheckedChangeListener { _, checkedId ->
+            val color = when(checkedId) {
+                R.id.tc_yellow -> Color.YELLOW
+                R.id.tc_cyan -> Color.CYAN
+                R.id.tc_green -> Color.GREEN
+                else -> Color.WHITE
+            }
+            settings = settings.copy(textColor = color)
+        }
+
+        rgOpacity.setOnCheckedChangeListener { _, checkedId ->
+            val opacity = when(checkedId) {
+                R.id.btn_op_25 -> 25
+                R.id.btn_op_50 -> 50
+                R.id.btn_op_75 -> 75
+                R.id.btn_op_100 -> 100
+                else -> 0
+            }
+            settings = settings.copy(bgOpacity = opacity)
+        }
+
+        // Back to Tracks + Save (Slide Back)
+        btnBack.setOnClickListener {
+            PreferenceManager.saveSubtitleSettings(this, settings)
+            applySubtitleSettings()
+            viewFlipper.inAnimation = inFromLeft
+            viewFlipper.outAnimation = outToRight
+            viewFlipper.showPrevious()
         }
 
         dialog.show()

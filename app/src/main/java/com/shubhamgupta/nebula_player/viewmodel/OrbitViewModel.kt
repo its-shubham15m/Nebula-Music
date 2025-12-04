@@ -1,7 +1,6 @@
 package com.shubhamgupta.nebula_player.viewmodel
 
 import android.app.Application
-import android.util.Log
 import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
@@ -50,7 +49,6 @@ class OrbitViewModel(application: Application) : AndroidViewModel(application) {
     val recommendedArtists: LiveData<List<String>> = _recommendedArtists
 
     // --- AI CONFIG ---
-    // Helper to get the key dynamically
     private fun getApiKey(): String {
         return PreferenceManager.getGeminiApiKey(getApplication()) ?: ""
     }
@@ -65,7 +63,8 @@ class OrbitViewModel(application: Application) : AndroidViewModel(application) {
     data class OrbitCard(
         val id: String,
         val title: String,
-        val subtitle: String,
+        val tagline: String, // New Tagline field
+        val imageName: String, // Filename in assets/playlists/
         val type: String, // "PLAYLIST_AI", "VIDEO", "SONG"
         val queryMood: String = "",
         val cachedSongIds: List<Long> = emptyList()
@@ -85,13 +84,17 @@ class OrbitViewModel(application: Application) : AndroidViewModel(application) {
             val randomMix = allSongs.shuffled().take(10)
             _timeWarpData.postValue((favorites + randomMix).distinctBy { it.id }.take(15))
 
-            // 3. AI Playlists Cards
+            // 3. AI Playlists Cards (Updated based on Image)
             val suggestions = listOf(
-                OrbitCard("ai_1", "Bollywood Mush", "Sentimental hits", "PLAYLIST_AI", "Romantic, Bollywood, Soft, Slow, Hindi"),
-                OrbitCard("ai_2", "1AM Feels", "Late night vibes", "PLAYLIST_AI", "Sad, Lo-fi, Slow, Melancholic, Acoustic"),
-                OrbitCard("ai_3", "Gym Grind", "High energy workout", "PLAYLIST_AI", "High tempo, Rap, Rock, EDM, Energy"),
-                OrbitCard("ai_4", "Sunday Morning", "Relax and unwind", "PLAYLIST_AI", "Acoustic, Jazz, Soft Pop, Happy"),
-                OrbitCard("ai_5", "Focus Flow", "Deep work session", "PLAYLIST_AI", "Instrumental, Classical, Ambient, No Lyrics")
+                OrbitCard("ai_1", "Bollywood Mush", "Sentimental B-Town hits", "bollywood_mush.png", "PLAYLIST_AI", "Bollywood, Romantic, Arijit Singh, Shreya Ghoshal, Soft, Hindi, Love"),
+                OrbitCard("ai_2", "1AM Feels", "For the late night thoughts", "1am_feels.png", "PLAYLIST_AI", "Sad, Lo-fi, Slow, Melancholic, Acoustic, Night, Lonely"),
+                OrbitCard("ai_3", "POP Icons", "Global chart toppers", "pop_icons.png", "PLAYLIST_AI", "Pop, English, Taylor Swift, Justin Bieber, Weeknd, Upbeat, Hits"),
+                OrbitCard("ai_4", "#GRWM", "Get Ready With Me vibe", "grwm.png", "PLAYLIST_AI", "Upbeat, Party, Bollywood Dance, Punjabi, Trendy, Fashion, Makeup"),
+                OrbitCard("ai_5", "pov: you're in love", "Butterflies in your stomach", "pov_love.png", "PLAYLIST_AI", "Romantic, Acoustic, Sweet, Slow, Love Songs, Dreamy"),
+                OrbitCard("ai_6", "Sad Melodies", "When the tears dry out", "sad_melodies.png", "PLAYLIST_AI", "Heartbreak, Sad, Piano, Emotional, Separation, Breakup"),
+                OrbitCard("ai_7", "Workout Mornings", "Push your limits", "workout.png", "PLAYLIST_AI", "Gym, Phonk, EDM, Rock, High Energy, Motivation, Cardio"),
+                OrbitCard("ai_8", "Old Classics", "Golden era nostalgia", "old_classics.png", "PLAYLIST_AI", "Retro, 90s, 80s, Kishore Kumar, Mohd Rafi, Classic, Hindi Old"),
+                OrbitCard("ai_9", "New Releases", "Fresh out of the studio", "new_releases.png", "PLAYLIST_AI", "New, 2024, 2025, Trendy, Latest, Fresh, Viral")
             )
             _aiPlaylists.postValue(suggestions)
 
@@ -133,7 +136,8 @@ class OrbitViewModel(application: Application) : AndroidViewModel(application) {
                 val cachedIds = getCachedPlaylist(playlistTitle)
                 if (cachedIds.isNotEmpty()) {
                     val songs = SongRepository.getAllSongs(context).filter { cachedIds.contains(it.id) }
-                    if (songs.isNotEmpty()) {
+                    // Only return cached if it has enough songs, otherwise regenerate
+                    if (songs.size > 10) {
                         withContext(Dispatchers.Main) { callback(songs) }
                         return@launch
                     }
@@ -142,33 +146,33 @@ class OrbitViewModel(application: Application) : AndroidViewModel(application) {
 
             // AI Generation Logic
             val allSongs = SongRepository.getAllSongs(context)
-            // Increased token limit slightly to give the AI more context
-            val simplifiedSongList = allSongs.take(400).joinToString("\n") { "${it.id}|${it.title}|${it.artist}" }
+            // Increased token context limit
+            val simplifiedSongList = allSongs.take(500).joinToString("\n") { "${it.id}|${it.title}|${it.artist}" }
 
             val currentKey = getApiKey()
             if (currentKey.isEmpty()) {
                 withContext(Dispatchers.Main) {
                     Toast.makeText(context, "Please set Gemini API Key in Settings", Toast.LENGTH_LONG).show()
-                    callback(allSongs.shuffled().take(20))
+                    callback(allSongs.shuffled().take(40))
                 }
                 return@launch
             }
 
-            // --- PROFESSIONAL PROMPT UPDATE ---
+            // --- PROFESSIONAL PROMPT UPDATE (Updated for 40 songs) ---
             val prompt = """
-                You are an expert music curator for a high-end streaming service like Spotify. 
-                Your task is to curate a highly cohesive playlist based on a specific mood or theme.
+                You are an expert music curator for a high-end streaming service. 
+                Your task is to curate a highly cohesive playlist based on a specific mood.
                 
                 Input Mood/Theme: '$mood'
                 
                 I have provided a local library of songs below in the format: 'ID|Title|Artist'.
                 
                 Instructions:
-                1. Select 20 to 25 songs from the list that BEST match the requested mood.
-                2. Prioritize "Vibe Consistency" - ensure the songs flow well together (e.g., don't mix heavy metal with soft lullabies unless the theme asks for it).
+                1. Select 40 to 50 songs from the list that BEST match the requested mood.
+                2. Prioritize "Vibe Consistency" - ensure the songs flow well together.
                 3. If the mood implies a specific genre (e.g., "Bollywood"), prioritize songs from that genre or artist.
                 4. Return ONLY a raw JSON array of the song IDs (integers/longs).
-                5. Do NOT include markdown formatting (like ```json), explanations, or song titles in the output. Just the array.
+                5. Do NOT include markdown formatting (like ```json), explanations, or song titles. Just the array.
                 
                 Local Library:
                 $simplifiedSongList
@@ -192,10 +196,10 @@ class OrbitViewModel(application: Application) : AndroidViewModel(application) {
                     keywords.any { k ->
                         s.title.contains(k, true) || (s.artist?.contains(k, true) == true)
                     }
-                }.take(25)
+                }.take(40) // Increased fallback limit
 
                 withContext(Dispatchers.Main) {
-                    callback(if(fallback.isNotEmpty()) fallback else allSongs.shuffled().take(20))
+                    callback(if(fallback.isNotEmpty()) fallback else allSongs.shuffled().take(40))
                 }
             }
         }
@@ -206,7 +210,7 @@ class OrbitViewModel(application: Application) : AndroidViewModel(application) {
             val allSongs = SongRepository.getAllSongs(getApplication())
             val similar = allSongs.filter {
                 (it.artist == seedSong.artist && it.id != seedSong.id)
-            }.shuffled().take(19).toMutableList()
+            }.shuffled().take(39).toMutableList() // Increased to match new length preference
             similar.add(0, seedSong)
             withContext(Dispatchers.Main) { callback(similar) }
         }
@@ -221,7 +225,6 @@ class OrbitViewModel(application: Application) : AndroidViewModel(application) {
             else -> "Late Night"
         }
 
-        // Fetch User Name
         val userName = try {
             UserProfileManager.getUserName(getApplication())
         } catch (e: Exception) { "User" }

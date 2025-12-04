@@ -1,6 +1,7 @@
 package com.shubhamgupta.nebula_player.fragments
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -52,7 +53,7 @@ class OrbitFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        viewModel = ViewModelProvider(requireActivity())[OrbitViewModel::class.java] // Use Activity Scope to share with Detail Fragment
+        viewModel = ViewModelProvider(requireActivity())[OrbitViewModel::class.java]
 
         initViews(view)
         setupInteractions()
@@ -115,7 +116,7 @@ class OrbitFragment : Fragment() {
         container.removeAllViews()
         val inflater = LayoutInflater.from(context)
         songs.forEach { song ->
-            val view = inflater.inflate(R.layout.item_orbit_card, container, false) // Using item_orbit_card
+            val view = inflater.inflate(R.layout.item_orbit_card, container, false)
             view.findViewById<TextView>(R.id.tv_title).text = song.title
             view.findViewById<TextView>(R.id.tv_subtitle).text = song.artist ?: "Unknown"
             val img = view.findViewById<ImageView>(R.id.img_art)
@@ -135,15 +136,26 @@ class OrbitFragment : Fragment() {
         container.removeAllViews()
         val inflater = LayoutInflater.from(context)
         playlists.forEach { card ->
-            val view = inflater.inflate(R.layout.item_orbit_card, container, false) // Using item_orbit_card
+            val view = inflater.inflate(R.layout.item_orbit_card, container, false)
+
+            // Set Title
             view.findViewById<TextView>(R.id.tv_title).text = card.title
-            view.findViewById<TextView>(R.id.tv_subtitle).text = "AI Curated"
+
+            // Set Tagline (Subtitle)
+            view.findViewById<TextView>(R.id.tv_subtitle).text = card.tagline
+
+            // Load specific Image from Assets
             val img = view.findViewById<ImageView>(R.id.img_art)
-            img.setImageResource(R.drawable.default_album_art)
-            img.setColorFilter(ContextCompat.getColor(requireContext(), R.color.purple_200), android.graphics.PorterDuff.Mode.MULTIPLY)
+            val assetPath = "file:///android_asset/playlists/${card.imageName}"
+
+            Glide.with(this)
+                .load(Uri.parse(assetPath))
+                .transform(CenterCrop(), RoundedCorners(16))
+                .placeholder(R.drawable.default_album_art)
+                .error(R.drawable.default_album_art)
+                .into(img)
 
             view.setOnClickListener {
-                // Navigate to Detail Fragment instead of playing immediately
                 openPlaylistDetails(card)
             }
             container.addView(view)
@@ -154,7 +166,7 @@ class OrbitFragment : Fragment() {
         container.removeAllViews()
         val inflater = LayoutInflater.from(context)
         videos.forEach { video ->
-            val view = inflater.inflate(R.layout.item_orbit_video, container, false) // Using new horizontal video layout
+            val view = inflater.inflate(R.layout.item_orbit_video, container, false)
             view.findViewById<TextView>(R.id.video_title).text = video.title
             view.findViewById<TextView>(R.id.video_file_info).text = "Video"
             view.findViewById<TextView>(R.id.video_duration).text = SongUtils.formatDuration(video.duration)
@@ -168,10 +180,16 @@ class OrbitFragment : Fragment() {
     }
 
     private fun openPlaylistDetails(card: OrbitViewModel.OrbitCard) {
-        val fragment = OrbitPlaylistFragment.newInstance(card.title, card.queryMood)
+        // Pass title, mood, tagline, and image path to the fragment
+        val fragment = OrbitPlaylistFragment.newInstance(
+            title = card.title,
+            mood = card.queryMood,
+            tagline = card.tagline,
+            imageName = card.imageName
+        )
         parentFragmentManager.commit {
             setCustomAnimations(R.anim.slide_in_right, R.anim.slide_out_left, R.anim.slide_in_left, R.anim.slide_out_right)
-            replace(R.id.home_content_container, fragment) // Make sure ID matches host container
+            replace(R.id.home_content_container, fragment)
             addToBackStack(null)
         }
     }
@@ -184,7 +202,6 @@ class OrbitFragment : Fragment() {
 
     @OptIn(UnstableApi::class)
     private fun playVideo(video: Video) {
-        // FIXED: Using VideoPlayerActivity class directly with VIDEO_ID
         try {
             val intent = Intent(requireContext(), VideoPlayerActivity::class.java)
             intent.putExtra("VIDEO_ID", video.id)
