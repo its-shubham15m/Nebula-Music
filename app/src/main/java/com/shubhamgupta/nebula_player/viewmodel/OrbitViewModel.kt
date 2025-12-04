@@ -2,6 +2,7 @@ package com.shubhamgupta.nebula_player.viewmodel
 
 import android.app.Application
 import android.util.Log
+import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
@@ -9,7 +10,6 @@ import androidx.lifecycle.viewModelScope
 import com.google.ai.client.generativeai.GenerativeModel
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
-import com.shubhamgupta.nebula_player.BuildConfig
 import com.shubhamgupta.nebula_player.models.Song
 import com.shubhamgupta.nebula_player.models.Video
 import com.shubhamgupta.nebula_player.repository.SongRepository
@@ -50,12 +50,15 @@ class OrbitViewModel(application: Application) : AndroidViewModel(application) {
     val recommendedArtists: LiveData<List<String>> = _recommendedArtists
 
     // --- AI CONFIG ---
-    private val GEMINI_API_KEY = BuildConfig.GEMINI_API_KEY
+    // Helper to get the key dynamically
+    private fun getApiKey(): String {
+        return PreferenceManager.getGeminiApiKey(getApplication()) ?: ""
+    }
 
-    private val generativeModel by lazy {
-        GenerativeModel(
+    private fun getGenerativeModel(): GenerativeModel {
+        return GenerativeModel(
             modelName = "gemini-1.5-flash",
-            apiKey = GEMINI_API_KEY
+            apiKey = getApiKey()
         )
     }
 
@@ -139,22 +142,42 @@ class OrbitViewModel(application: Application) : AndroidViewModel(application) {
 
             // AI Generation Logic
             val allSongs = SongRepository.getAllSongs(context)
-            val simplifiedSongList = allSongs.take(300).joinToString("\n") { "${it.id}|${it.title}|${it.artist}" } // Limit for token size
+            // Increased token limit slightly to give the AI more context
+            val simplifiedSongList = allSongs.take(400).joinToString("\n") { "${it.id}|${it.title}|${it.artist}" }
 
-            if (GEMINI_API_KEY.isEmpty() || simplifiedSongList.isEmpty()) {
-                withContext(Dispatchers.Main) { callback(allSongs.shuffled().take(20)) }
+            val currentKey = getApiKey()
+            if (currentKey.isEmpty()) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Please set Gemini API Key in Settings", Toast.LENGTH_LONG).show()
+                    callback(allSongs.shuffled().take(20))
+                }
                 return@launch
             }
 
+            // --- PROFESSIONAL PROMPT UPDATE ---
             val prompt = """
-                Act as a DJ. I have a list of songs: 'ID|Title|Artist'.
-                Select 15-20 songs matching mood: '$mood'.
-                Return JSON array of IDs only.
-                List: $simplifiedSongList
+                You are an expert music curator for a high-end streaming service like Spotify. 
+                Your task is to curate a highly cohesive playlist based on a specific mood or theme.
+                
+                Input Mood/Theme: '$mood'
+                
+                I have provided a local library of songs below in the format: 'ID|Title|Artist'.
+                
+                Instructions:
+                1. Select 20 to 25 songs from the list that BEST match the requested mood.
+                2. Prioritize "Vibe Consistency" - ensure the songs flow well together (e.g., don't mix heavy metal with soft lullabies unless the theme asks for it).
+                3. If the mood implies a specific genre (e.g., "Bollywood"), prioritize songs from that genre or artist.
+                4. Return ONLY a raw JSON array of the song IDs (integers/longs).
+                5. Do NOT include markdown formatting (like ```json), explanations, or song titles in the output. Just the array.
+                
+                Local Library:
+                $simplifiedSongList
             """.trimIndent()
 
             try {
-                val response = generativeModel.generateContent(prompt)
+                // Use dynamic generative model with user key
+                val model = getGenerativeModel()
+                val response = model.generateContent(prompt)
                 val responseText = response.text?.replace("```json", "")?.replace("```", "")?.trim()
                 val type = object : TypeToken<List<Long>>() {}.type
                 val ids: List<Long> = Gson().fromJson(responseText, type)
@@ -163,10 +186,17 @@ class OrbitViewModel(application: Application) : AndroidViewModel(application) {
                 savePlaylistToCache(playlistTitle, ids)
                 withContext(Dispatchers.Main) { callback(matchedSongs) }
             } catch (e: Exception) {
-                // Fallback
+                // Fallback: Smart local filtering if AI fails
                 val keywords = mood.split(", ")
-                val fallback = allSongs.filter { s -> keywords.any { k -> s.title.contains(k, true) } }.take(20)
-                withContext(Dispatchers.Main) { callback(if(fallback.isNotEmpty()) fallback else allSongs.shuffled().take(15)) }
+                val fallback = allSongs.filter { s ->
+                    keywords.any { k ->
+                        s.title.contains(k, true) || (s.artist?.contains(k, true) == true)
+                    }
+                }.take(25)
+
+                withContext(Dispatchers.Main) {
+                    callback(if(fallback.isNotEmpty()) fallback else allSongs.shuffled().take(20))
+                }
             }
         }
     }

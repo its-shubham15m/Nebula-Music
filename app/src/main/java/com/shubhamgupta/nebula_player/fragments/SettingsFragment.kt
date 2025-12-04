@@ -11,6 +11,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -68,6 +69,7 @@ class SettingsFragment : Fragment() {
         setupToolbar(view)
         setupProfileSettings(view)
         setupAudioSettings(view)
+        setupAiSettings(view) // Added this call
         setupLibrarySettings(view)
         setupVideoSettings(view)
         setupGeneralSettings(view)
@@ -268,6 +270,41 @@ class SettingsFragment : Fragment() {
             PreferenceManager.setFilterShortAudioEnabled(context, isChecked)
             Toast.makeText(context, "Refresh library to apply changes", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    // --- NEW: AI Settings Setup ---
+    private fun setupAiSettings(view: View) {
+        val context = requireContext()
+        view.findViewById<LinearLayout>(R.id.setting_gemini_key)?.setOnClickListener {
+            showApiKeyDialog(context)
+        }
+    }
+
+    private fun showApiKeyDialog(context: Context) {
+        val editText = EditText(context)
+        editText.hint = "Paste your API Key here"
+
+        // Pre-fill existing key if available
+        val existingKey = PreferenceManager.getGeminiApiKey(context)
+        if (!existingKey.isNullOrEmpty()) {
+            editText.setText(existingKey)
+        }
+
+        AlertDialog.Builder(context)
+            .setTitle("Gemini API Key")
+            .setMessage("Enter your Google Gemini API Key to enable AI features. You can get one from Google AI Studio.")
+            .setView(editText)
+            .setPositiveButton("Save") { _, _ ->
+                val key = editText.text.toString().trim()
+                if (key.isNotEmpty()) {
+                    PreferenceManager.saveGeminiApiKey(context, key)
+                    Toast.makeText(context, "API Key Saved", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(context, "Key cannot be empty", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun setupLibrarySettings(view: View) {

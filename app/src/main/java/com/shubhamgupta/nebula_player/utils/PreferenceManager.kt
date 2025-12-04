@@ -58,6 +58,9 @@ object PreferenceManager {
     private const val KEY_SUB_BG_OPACITY = "sub_bg_opacity"
     private const val KEY_SUB_BOTTOM_PADDING = "sub_bottom_padding" // Position from bottom
 
+    // --- NEW: Gemini API Key ---
+    private const val KEY_GEMINI_API_KEY = "gemini_api_key"
+
     // Cache
     private var cachedSongsMap: Map<Long, Song> = emptyMap()
     private var isCacheDirty = true
@@ -72,6 +75,15 @@ object PreferenceManager {
     // Kept private to maintain encapsulation
     private fun getPreferences(context: Context): SharedPreferences {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    }
+
+    // --- Gemini API Key Access ---
+    fun getGeminiApiKey(context: Context): String? {
+        return getPreferences(context).getString(KEY_GEMINI_API_KEY, null)
+    }
+
+    fun saveGeminiApiKey(context: Context, key: String) {
+        getPreferences(context).edit().putString(KEY_GEMINI_API_KEY, key.trim()).apply()
     }
 
     // --- Audio Settings ---
