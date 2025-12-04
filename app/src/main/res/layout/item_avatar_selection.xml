@@ -8,8 +8,8 @@
 
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/card_avatar_root"
-        android:layout_width="90dp"
-        android:layout_height="90dp"
+        android:layout_width="84dp"
+        android:layout_height="84dp"
         app:cardCornerRadius="45dp"
         app:cardElevation="4dp"
         app:cardBackgroundColor="@android:color/transparent">

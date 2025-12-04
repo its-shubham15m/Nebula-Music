@@ -4,7 +4,8 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="?android:attr/colorBackground">
+    android:fitsSystemWindows="true"
+    android:background="@color/colorBackground">
 
     <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"
@@ -15,30 +16,61 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:paddingBottom="180dp">
+            android:paddingBottom="160dp">
 
-            <!-- Greeting Header -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
                 android:paddingHorizontal="24dp"
-                android:paddingTop="48dp"
+                android:paddingTop="24dp"
+                android:paddingBottom="12dp">
+
+                <com.google.android.material.imageview.ShapeableImageView
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:src="@drawable/app_icon"
+                    app:shapeAppearanceOverlay="@style/ShapeAppearance.App.CornerRound"
+                    android:scaleType="fitCenter"
+                    android:layout_marginEnd="12dp"/>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Nebula Player"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:textColor="?attr/colorOnSurface"/>
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="24dp"
                 android:paddingBottom="24dp">
 
                 <TextView
                     android:id="@+id/tv_orbit_greeting"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Good Afternoon"
-                    android:textSize="32sp"
-                    android:letterSpacing="-0.02"
-                    android:fontFamily="sans-serif-black"
+                    android:text="Good Evening, "
+                    android:textSize="24sp"
+                    android:textStyle="bold"
+                    android:textColor="?attr/colorOnSurface" />
+
+                <TextView
+                    android:id="@+id/tv_orbit_username"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="User"
+                    android:textSize="24sp"
+                    android:fontFamily="sans-serif"
                     android:textColor="?attr/colorOnSurface" />
             </LinearLayout>
 
-            <!-- Tabs / Filter Chips -->
             <HorizontalScrollView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -52,7 +84,6 @@
                     android:layout_height="wrap_content"
                     android:orientation="horizontal">
 
-                    <!-- All Chip -->
                     <com.google.android.material.card.MaterialCardView
                         android:id="@+id/chip_all"
                         android:layout_width="wrap_content"
@@ -74,7 +105,6 @@
                             android:fontFamily="sans-serif-medium"/>
                     </com.google.android.material.card.MaterialCardView>
 
-                    <!-- Music Chip -->
                     <com.google.android.material.card.MaterialCardView
                         android:id="@+id/chip_music"
                         android:layout_width="wrap_content"
@@ -96,7 +126,6 @@
                             android:fontFamily="sans-serif-medium"/>
                     </com.google.android.material.card.MaterialCardView>
 
-                    <!-- Video Chip -->
                     <com.google.android.material.card.MaterialCardView
                         android:id="@+id/chip_video"
                         android:layout_width="wrap_content"
@@ -120,7 +149,6 @@
                 </LinearLayout>
             </HorizontalScrollView>
 
-            <!-- Last Watched Card (Video Tab Only) -->
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/card_last_watched"
                 android:layout_width="match_parent"
@@ -188,7 +216,6 @@
                 </FrameLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- Quick Picks (Time Warp) -->
             <TextView
                 android:id="@+id/tv_time_warp_header"
                 android:layout_width="match_parent"
@@ -215,7 +242,6 @@
                     android:orientation="horizontal" />
             </HorizontalScrollView>
 
-            <!-- AI Playlists -->
             <TextView
                 android:id="@+id/tv_echo_chamber_header"
                 android:layout_width="match_parent"
@@ -242,7 +268,6 @@
                     android:orientation="horizontal" />
             </HorizontalScrollView>
 
-            <!-- Videos Section -->
             <TextView
                 android:id="@+id/tv_stellar_header"
                 android:layout_width="match_parent"

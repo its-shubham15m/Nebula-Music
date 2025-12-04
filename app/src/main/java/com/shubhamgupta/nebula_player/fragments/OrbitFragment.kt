@@ -69,7 +69,19 @@ class OrbitFragment : Fragment() {
 
     private fun initViews(view: View) {
         val tvGreeting = view.findViewById<TextView>(R.id.tv_orbit_greeting)
-        viewModel.greeting.observe(viewLifecycleOwner) { tvGreeting.text = it }
+        val tvUsername = view.findViewById<TextView>(R.id.tv_orbit_username) // Added this
+
+        // Fix: Split the greeting string to separate Bold Time and Normal Name
+        viewModel.greeting.observe(viewLifecycleOwner) { fullGreeting ->
+            if (fullGreeting.contains(",")) {
+                val parts = fullGreeting.split(",", limit = 2)
+                tvGreeting.text = parts[0] + "," // "Good Evening," (Bold)
+                tvUsername.text = parts[1]       // " User" (Normal)
+            } else {
+                tvGreeting.text = fullGreeting
+                tvUsername.text = ""
+            }
+        }
 
         loadingOverlay = view.findViewById(R.id.loading_overlay)
         chipAll = view.findViewById(R.id.chip_all)

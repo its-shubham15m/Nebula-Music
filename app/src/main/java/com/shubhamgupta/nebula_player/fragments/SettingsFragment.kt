@@ -31,6 +31,7 @@ import com.shubhamgupta.nebula_player.repository.SongRepository
 import com.shubhamgupta.nebula_player.utils.PreferenceManager
 import com.shubhamgupta.nebula_player.utils.UserProfileManager
 import kotlin.math.abs
+import androidx.core.graphics.drawable.toDrawable
 
 class SettingsFragment : Fragment() {
 
@@ -281,30 +282,45 @@ class SettingsFragment : Fragment() {
     }
 
     private fun showApiKeyDialog(context: Context) {
-        val editText = EditText(context)
-        editText.hint = "Paste your API Key here"
+        // 1. Inflate the custom layout
+        val dialogView = LayoutInflater.from(context).inflate(R.layout.dialog_gemini_api, null)
 
-        // Pre-fill existing key if available
+        // 2. Create the Dialog
+        val builder = AlertDialog.Builder(context)
+        builder.setView(dialogView)
+        val dialog = builder.create()
+
+        // 3. Make background transparent so the custom XML corners show correctly
+        dialog.window?.setBackgroundDrawable(Color.TRANSPARENT.toDrawable())
+
+        // 4. Initialize Views
+        val etApiKey = dialogView.findViewById<EditText>(R.id.et_api_key)
+        val btnCancel = dialogView.findViewById<Button>(R.id.btn_cancel_api)
+        val btnSave = dialogView.findViewById<Button>(R.id.btn_save_api)
+
+        // 5. Pre-fill existing key if available
         val existingKey = PreferenceManager.getGeminiApiKey(context)
         if (!existingKey.isNullOrEmpty()) {
-            editText.setText(existingKey)
+            etApiKey.setText(existingKey)
         }
 
-        AlertDialog.Builder(context)
-            .setTitle("Gemini API Key")
-            .setMessage("Enter your Google Gemini API Key to enable AI features. You can get one from Google AI Studio.")
-            .setView(editText)
-            .setPositiveButton("Save") { _, _ ->
-                val key = editText.text.toString().trim()
-                if (key.isNotEmpty()) {
-                    PreferenceManager.saveGeminiApiKey(context, key)
-                    Toast.makeText(context, "API Key Saved", Toast.LENGTH_SHORT).show()
-                } else {
-                    Toast.makeText(context, "Key cannot be empty", Toast.LENGTH_SHORT).show()
-                }
+        // 6. Handle Clicks
+        btnCancel.setOnClickListener {
+            dialog.dismiss()
+        }
+
+        btnSave.setOnClickListener {
+            val key = etApiKey.text.toString().trim()
+            if (key.isNotEmpty()) {
+                PreferenceManager.saveGeminiApiKey(context, key)
+                Toast.makeText(context, "API Key Saved", Toast.LENGTH_SHORT).show()
+                dialog.dismiss()
+            } else {
+                Toast.makeText(context, "Key cannot be empty", Toast.LENGTH_SHORT).show()
             }
-            .setNegativeButton("Cancel", null)
-            .show()
+        }
+
+        dialog.show()
     }
 
     private fun setupLibrarySettings(view: View) {

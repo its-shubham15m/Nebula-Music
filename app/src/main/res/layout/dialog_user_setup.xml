@@ -1,84 +1,95 @@
 <?xml version="1.0" encoding="utf-8"?>
-<com.google.android.material.card.MaterialCardView
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:layout_margin="24dp"
-    app:cardCornerRadius="24dp"
-    app:cardElevation="8dp">
+    android:layout_height="match_parent"
+    android:background="@android:color/transparent">
 
-    <LinearLayout
+    <com.google.android.material.card.MaterialCardView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="24dp"
-        android:background="@color/colorSurface">
+        android:layout_gravity="center"
+        android:layout_margin="24dp"
+        app:cardBackgroundColor="@color/colorSurfaceVariant"
+        app:strokeColor="#33FFFFFF"
+        app:strokeWidth="1dp"
+        app:cardCornerRadius="24dp"
+        app:cardElevation="8dp">
 
-        <!-- Added ID here to change text dynamically -->
-        <TextView
-            android:id="@+id/tv_dialog_title"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Edit Profile"
-            android:textSize="24sp"
-            android:textStyle="bold"
-            android:textColor="@color/colorOnSurface"
-            android:layout_gravity="center_horizontal"
-            android:layout_marginBottom="16dp"/>
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Select Avatar"
-            android:textSize="14sp"
-            android:textColor="@color/colorOnSurface"
-            android:layout_gravity="center_horizontal"
-            android:layout_marginBottom="16dp"/>
-
-        <!--
-           Horizontal RecyclerView for Avatars.
-           Height increased slightly to accommodate scaling.
-        -->
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/rv_avatar_picker"
-            android:layout_width="match_parent"
-            android:layout_height="140dp"
-            android:orientation="horizontal"
-            android:layout_marginBottom="24dp"
-            android:clipToPadding="false"
-            android:background="@android:color/transparent"/>
-
-        <com.google.android.material.textfield.TextInputLayout
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Your Name"
-            app:boxStrokeWidth="0dp"
-            app:boxBackgroundColor="@color/colorSurfaceVariant"
-            app:boxCornerRadiusTopStart="12dp"
-            app:boxCornerRadiusTopEnd="12dp"
-            app:boxCornerRadiusBottomStart="12dp"
-            app:boxCornerRadiusBottomEnd="12dp"
-            android:layout_marginBottom="24dp">
+            android:orientation="vertical"
+            android:padding="24dp">
 
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/input_user_name"
+            <TextView
+                android:id="@+id/tv_dialog_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Edit Profile"
+                android:textColor="@color/colorOnSurface"
+                android:textSize="24sp"
+                android:textStyle="bold"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginBottom="8dp"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Select Avatar"
+                android:textColor="@color/colorOnSurface"
+                android:textSize="14sp"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginBottom="16dp"/>
+
+            <!-- RecyclerView for Avatars -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rv_avatar_picker"
+                android:layout_width="match_parent"
+                android:layout_height="140dp"
+                android:orientation="horizontal"
+                android:layout_marginBottom="8dp"
+                android:clipToPadding="false"
+                android:background="@android:color/transparent"/>
+
+            <!-- Name Input Field Container (Styled like Gemini Dialog) -->
+            <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:inputType="textPersonName|textCapWords"
-                android:singleLine="true"/>
-        </com.google.android.material.textfield.TextInputLayout>
+                android:layout_marginBottom="24dp"
+                app:cardCornerRadius="12dp"
+                app:cardElevation="0dp"
+                app:strokeWidth="1dp"
+                app:strokeColor="#80FFFFFF"
+                app:cardBackgroundColor="@android:color/transparent">
 
-        <Button
-            android:id="@+id/btn_save_setup"
-            android:layout_width="match_parent"
-            android:layout_height="56dp"
-            android:text="Save Profile"
-            android:textColor="@color/white"
-            android:textAllCaps="false"
-            android:textSize="16sp"
-            android:textStyle="bold"
-            app:cornerRadius="16dp"/>
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/input_user_name"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@android:color/transparent"
+                    android:padding="16dp"
+                    android:hint="Your Name"
+                    android:textColor="@color/colorOnSurface"
+                    android:textColorHint="@color/colorOnSurface"
+                    android:alpha="0.8"
+                    android:textSize="16sp"
+                    android:inputType="textPersonName|textCapWords"
+                    android:singleLine="true"/>
+            </com.google.android.material.card.MaterialCardView>
 
-    </LinearLayout>
-</com.google.android.material.card.MaterialCardView>
+            <Button
+                android:id="@+id/btn_save_setup"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:text="Save Profile"
+                android:textColor="#FFFFFF"
+                android:textAllCaps="false"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                app:backgroundTint="#3EA6FF"
+                app:cornerRadius="16dp"/>
+
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+</FrameLayout>
