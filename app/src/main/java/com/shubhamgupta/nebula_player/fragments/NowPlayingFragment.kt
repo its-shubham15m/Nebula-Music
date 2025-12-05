@@ -415,6 +415,59 @@ class NowPlayingFragment : Fragment() {
         tvLyricsPlain.setOnClickListener { toggleLyricsVisibility() }
     }
 
+    // Helper to intelligently guess active device ID if preference is missing (-1 or 0)
+    private fun getActiveDeviceId(devices: List<AudioDeviceInfo>): Int {
+        val preferredId = musicService?.getPreferredAudioDevice() ?: -1
+        if (preferredId > 0) return preferredId
+
+        // Heuristics:
+        // 1. Bluetooth
+        devices.find {
+            it.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ||
+                    it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO
+        }?.let { return it.id }
+
+        // 2. Wired
+        devices.find {
+            it.type == AudioDeviceInfo.TYPE_WIRED_HEADSET ||
+                    it.type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES ||
+                    it.type == AudioDeviceInfo.TYPE_USB_HEADSET
+        }?.let { return it.id }
+
+        // 3. Built-in Speaker (Fallback)
+        return devices.find { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }?.id ?: -1
+    }
+
+    private fun updateAudioOutputUI() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val audioManager = requireContext().getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            val devices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+
+            val activeDeviceId = getActiveDeviceId(devices.toList())
+            val activeDevice = devices.find { it.id == activeDeviceId }
+
+            if (activeDevice != null) {
+                // Update Icon
+                val iconRes = when(activeDevice.type) {
+                    AudioDeviceInfo.TYPE_BLUETOOTH_A2DP, AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> R.drawable.ic_bluetooth
+                    AudioDeviceInfo.TYPE_WIRED_HEADSET, AudioDeviceInfo.TYPE_WIRED_HEADPHONES -> R.drawable.ic_headset
+                    else -> R.drawable.ic_speaker
+                }
+                btnAudioOutput.setImageResource(iconRes)
+
+                val spotifyGreen = Color.parseColor("#1DB954")
+                val white = Color.WHITE
+
+                // Update Color: Green if NOT internal speaker, White otherwise
+                if (activeDevice.type != AudioDeviceInfo.TYPE_BUILTIN_SPEAKER) {
+                    btnAudioOutput.setColorFilter(spotifyGreen)
+                } else {
+                    btnAudioOutput.setColorFilter(white)
+                }
+            }
+        }
+    }
+
     private fun showAudioOutputDialog() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             val audioManager = requireContext().getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -436,13 +489,14 @@ class NowPlayingFragment : Fragment() {
             // Setup RecyclerView
             recyclerView.layoutManager = LinearLayoutManager(requireContext())
 
-            // Get currently active device logic
-            val currentDeviceId = musicService?.getPreferredAudioDevice() ?: -1
+            // Get active device ID using the smart helper
+            val currentDeviceId = getActiveDeviceId(devices.toList())
 
             val adapter = AudioDeviceAdapter(filteredDevices, currentDeviceId) { selectedDevice ->
                 val success = musicService?.setPreferredAudioDevice(selectedDevice.id) == true
                 if (success) {
                     Toast.makeText(requireContext(), "Switched to ${selectedDevice.productName}", Toast.LENGTH_SHORT).show()
+                    updateAudioOutputUI() // Refresh the main button immediately
                     audioOutputDialog?.dismiss()
                 } else {
                     Toast.makeText(requireContext(), "Could not switch device", Toast.LENGTH_SHORT).show()
@@ -1016,6 +1070,7 @@ class NowPlayingFragment : Fragment() {
 
         startSeekBarUpdates()
         updatePlaybackControls()
+        updateAudioOutputUI() // CHECK AUDIO OUTPUT ON RESUME
 
         // Re-enable marquee when fragment resumes
         tvSongTitle.isSelected = true
