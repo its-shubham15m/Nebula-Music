@@ -13,11 +13,14 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
+import com.bumptech.glide.load.resource.bitmap.CenterCrop
+import com.bumptech.glide.load.resource.bitmap.RoundedCorners
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.shubhamgupta.nebula_player.MainActivity
 import com.shubhamgupta.nebula_player.R
 import com.shubhamgupta.nebula_player.adapters.SongAdapter
 import com.shubhamgupta.nebula_player.models.Song
+import com.shubhamgupta.nebula_player.utils.SongUtils
 import com.shubhamgupta.nebula_player.viewmodel.OrbitViewModel
 
 class OrbitPlaylistFragment : Fragment() {
@@ -67,23 +70,19 @@ class OrbitPlaylistFragment : Fragment() {
         setupRecyclerView(view)
         setupObservers()
 
-        // Load data
+        // Load data - The ViewModel will now ignore this if data is already present
         viewModel.loadPlaylistDetails(playlistMood, playlistTitle)
     }
 
     private fun setupUI(view: View) {
-        // Fix: Use custom back button instead of Toolbar navigation
         view.findViewById<View>(R.id.btn_back).setOnClickListener {
             parentFragmentManager.popBackStack()
         }
 
         view.findViewById<TextView>(R.id.tv_toolbar_title).text = playlistTitle
         view.findViewById<TextView>(R.id.tv_playlist_title).text = playlistTitle
-
-        // Set Tagline
         view.findViewById<TextView>(R.id.tv_playlist_desc).text = playlistTagline
 
-        // Set Playlist Art from Assets
         val imgPlaylist = view.findViewById<ImageView>(R.id.img_playlist_art)
         if (playlistImageName.isNotEmpty()) {
             val assetPath = "file:///android_asset/playlists/$playlistImageName"
@@ -93,12 +92,10 @@ class OrbitPlaylistFragment : Fragment() {
                 .into(imgPlaylist)
         }
 
-        // Refresh Button
         view.findViewById<View>(R.id.btn_refresh).setOnClickListener {
             viewModel.loadPlaylistDetails(playlistMood, playlistTitle, forceRefresh = true)
         }
 
-        // Shuffle Button
         view.findViewById<View>(R.id.btn_shuffle_card).setOnClickListener {
             if(songList.isNotEmpty()) {
                 val shuffled = ArrayList(songList)
@@ -107,7 +104,6 @@ class OrbitPlaylistFragment : Fragment() {
             }
         }
 
-        // Play All Button
         view.findViewById<View>(R.id.btn_play_all_card).setOnClickListener {
             if(songList.isNotEmpty()) {
                 playMusic(songList, 0)
@@ -119,16 +115,15 @@ class OrbitPlaylistFragment : Fragment() {
         val rv = view.findViewById<RecyclerView>(R.id.rv_songs)
         rv.layoutManager = LinearLayoutManager(context)
 
-        // Using existing SongAdapter
         songAdapter = SongAdapter(requireContext(),
             onItemClick = { pos -> playMusic(songList, pos) },
             onDataChanged = {},
-            onDeleteRequest = {} // Read-only view
+            onDeleteRequest = {}
         )
         rv.adapter = songAdapter
     }
 
-    private fun setupRecommendations(view: View, artists: List<String>) {
+    private fun setupRecommendations(view: View, songs: List<Song>) {
         val rvRec = view.findViewById<RecyclerView>(R.id.rv_recommendations)
         rvRec.adapter = object : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
             override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
@@ -136,12 +131,23 @@ class OrbitPlaylistFragment : Fragment() {
                 return object : RecyclerView.ViewHolder(v) {}
             }
             override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
-                val artist = artists[position]
-                holder.itemView.findViewById<TextView>(R.id.tv_title).text = artist
-                holder.itemView.findViewById<TextView>(R.id.tv_subtitle).text = "Artist"
-                holder.itemView.findViewById<ImageView>(R.id.img_art).setImageResource(R.drawable.default_album_art)
+                val song = songs[position]
+
+                holder.itemView.findViewById<TextView>(R.id.tv_title).text = song.title
+                holder.itemView.findViewById<TextView>(R.id.tv_subtitle).text = song.artist ?: "Unknown"
+
+                val img = holder.itemView.findViewById<ImageView>(R.id.img_art)
+                Glide.with(holder.itemView.context)
+                    .load(SongUtils.getAlbumArtUri(song.albumId))
+                    .transform(CenterCrop(), RoundedCorners(16))
+                    .placeholder(R.drawable.default_album_art)
+                    .into(img)
+
+                holder.itemView.setOnClickListener {
+                    playMusic(arrayListOf(song), 0)
+                }
             }
-            override fun getItemCount() = artists.size
+            override fun getItemCount() = songs.size
         }
     }
 
@@ -150,7 +156,6 @@ class OrbitPlaylistFragment : Fragment() {
             songList = ArrayList(songs)
             songAdapter.submitList(songs)
 
-            // Update Stats
             if (songs.isNotEmpty()) {
                 val durationMin = (songs.sumOf { it.duration } / 1000) / 60
                 val statsText = "${songs.size} Songs • ${durationMin} min"
@@ -160,8 +165,8 @@ class OrbitPlaylistFragment : Fragment() {
             }
         }
 
-        viewModel.recommendedArtists.observe(viewLifecycleOwner) { artists ->
-            view?.let { setupRecommendations(it, artists) }
+        viewModel.recommendedSongs.observe(viewLifecycleOwner) { songs ->
+            view?.let { setupRecommendations(it, songs) }
         }
     }
 

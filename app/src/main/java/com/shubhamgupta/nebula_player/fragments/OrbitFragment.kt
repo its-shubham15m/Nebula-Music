@@ -17,9 +17,11 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.commit
 import androidx.lifecycle.ViewModelProvider
 import androidx.media3.common.util.UnstableApi
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.resource.bitmap.CenterCrop
 import com.bumptech.glide.load.resource.bitmap.RoundedCorners
+import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions
 import com.google.android.material.card.MaterialCardView
 import com.shubhamgupta.nebula_player.MainActivity
 import com.shubhamgupta.nebula_player.R
@@ -33,19 +35,26 @@ class OrbitFragment : Fragment() {
 
     private lateinit var viewModel: OrbitViewModel
     private var loadingOverlay: FrameLayout? = null
+    private lateinit var swipeRefresh: SwipeRefreshLayout
 
     private lateinit var chipAll: MaterialCardView
     private lateinit var chipMusic: MaterialCardView
     private lateinit var chipVideo: MaterialCardView
+
+    // Containers for Content
     private lateinit var containerTimeWarp: LinearLayout
     private lateinit var containerAiPlaylists: LinearLayout
     private lateinit var containerVideos: LinearLayout
+    private lateinit var containerArtists: LinearLayout
     private lateinit var cardLastWatched: MaterialCardView
 
-    // Headers to hide/show based on filter
-    private lateinit var headerTimeWarp: TextView
-    private lateinit var headerAiPlaylists: TextView
-    private lateinit var headerVideos: TextView
+    // Wrapper Layouts for Reordering
+    private lateinit var mainContentContainer: LinearLayout
+    private lateinit var layoutHeaderBlock: LinearLayout
+    private lateinit var layoutSectionTimeWarp: LinearLayout
+    private lateinit var layoutSectionArtists: LinearLayout
+    private lateinit var layoutSectionEcho: LinearLayout
+    private lateinit var layoutSectionStellar: LinearLayout
 
     private var currentFilter = "ALL"
 
@@ -64,38 +73,48 @@ class OrbitFragment : Fragment() {
         setupInteractions()
         observeViewModel()
 
-        viewModel.loadOrbitData()
+        // Only load if not loaded before (prevents refresh on back)
+        if (!viewModel.isDataLoaded) {
+            viewModel.loadOrbitData()
+        }
     }
 
     private fun initViews(view: View) {
-        val tvGreeting = view.findViewById<TextView>(R.id.tv_orbit_greeting)
-        val tvUsername = view.findViewById<TextView>(R.id.tv_orbit_username) // Added this
+        swipeRefresh = view.findViewById(R.id.swipe_refresh)
+        loadingOverlay = view.findViewById(R.id.loading_overlay)
 
-        // Fix: Split the greeting string to separate Bold Time and Normal Name
+        val tvGreeting = view.findViewById<TextView>(R.id.tv_orbit_greeting)
+        val tvUsername = view.findViewById<TextView>(R.id.tv_orbit_username)
+
         viewModel.greeting.observe(viewLifecycleOwner) { fullGreeting ->
             if (fullGreeting.contains(",")) {
                 val parts = fullGreeting.split(",", limit = 2)
-                tvGreeting.text = parts[0] + "," // "Good Evening," (Bold)
-                tvUsername.text = parts[1]       // " User" (Normal)
+                tvGreeting.text = parts[0] + ","
+                tvUsername.text = parts[1]
             } else {
                 tvGreeting.text = fullGreeting
                 tvUsername.text = ""
             }
         }
 
-        loadingOverlay = view.findViewById(R.id.loading_overlay)
         chipAll = view.findViewById(R.id.chip_all)
         chipMusic = view.findViewById(R.id.chip_music)
         chipVideo = view.findViewById(R.id.chip_video)
         cardLastWatched = view.findViewById(R.id.card_last_watched)
 
+        // Content Containers
         containerTimeWarp = view.findViewById(R.id.container_time_warp)
         containerAiPlaylists = view.findViewById(R.id.container_echo_chamber)
         containerVideos = view.findViewById(R.id.container_stellar)
+        containerArtists = view.findViewById(R.id.container_artists)
 
-        headerTimeWarp = view.findViewById(R.id.tv_time_warp_header)
-        headerAiPlaylists = view.findViewById(R.id.tv_echo_chamber_header)
-        headerVideos = view.findViewById(R.id.tv_stellar_header)
+        // Wrapper Layouts (For shuffling)
+        mainContentContainer = view.findViewById(R.id.main_content_container)
+        layoutHeaderBlock = view.findViewById(R.id.layout_header_block)
+        layoutSectionTimeWarp = view.findViewById(R.id.layout_section_time_warp)
+        layoutSectionArtists = view.findViewById(R.id.layout_section_artists)
+        layoutSectionEcho = view.findViewById(R.id.layout_section_echo_chamber)
+        layoutSectionStellar = view.findViewById(R.id.layout_section_stellar)
     }
 
     private fun setupInteractions() {
@@ -107,43 +126,79 @@ class OrbitFragment : Fragment() {
             val video = viewModel.lastWatchedData.value
             if (video != null) playVideo(video)
         }
+
+        // Pull to refresh logic
+        swipeRefresh.setOnRefreshListener {
+            viewModel.loadOrbitData(forceRefresh = true)
+            randomizeSectionOrder()
+        }
+    }
+
+    private fun randomizeSectionOrder() {
+        // Detach views
+        mainContentContainer.removeView(layoutSectionTimeWarp)
+        mainContentContainer.removeView(layoutSectionArtists)
+        mainContentContainer.removeView(layoutSectionEcho)
+        mainContentContainer.removeView(layoutSectionStellar)
+
+        // Shuffle
+        val sections = listOf(
+            layoutSectionTimeWarp,
+            layoutSectionArtists,
+            layoutSectionEcho,
+            layoutSectionStellar
+        ).shuffled()
+
+        // Re-attach in new order
+        sections.forEach { section ->
+            mainContentContainer.addView(section)
+        }
     }
 
     private fun observeViewModel() {
         viewModel.isLoading.observe(viewLifecycleOwner) { isLoading ->
-            loadingOverlay?.visibility = if (isLoading) View.VISIBLE else View.GONE
+            // Only show overlay on initial load, use SwipeIndicator for refresh
+            if(isLoading && !swipeRefresh.isRefreshing) {
+                loadingOverlay?.visibility = View.VISIBLE
+            } else {
+                loadingOverlay?.visibility = View.GONE
+                if(!isLoading) swipeRefresh.isRefreshing = false
+            }
         }
 
         viewModel.timeWarpData.observe(viewLifecycleOwner) { items ->
             if (currentFilter != "VIDEO") {
-                headerTimeWarp.visibility = View.VISIBLE
-                (containerTimeWarp.parent as? View)?.visibility = View.VISIBLE
+                layoutSectionTimeWarp.visibility = View.VISIBLE
                 populateSongs(containerTimeWarp, items.filterIsInstance<Song>())
             } else {
-                headerTimeWarp.visibility = View.GONE
-                (containerTimeWarp.parent as? View)?.visibility = View.GONE
+                layoutSectionTimeWarp.visibility = View.GONE
+            }
+        }
+
+        viewModel.artistData.observe(viewLifecycleOwner) { artists ->
+            if (currentFilter != "VIDEO") {
+                layoutSectionArtists.visibility = View.VISIBLE
+                populateArtists(containerArtists, artists)
+            } else {
+                layoutSectionArtists.visibility = View.GONE
             }
         }
 
         viewModel.aiPlaylists.observe(viewLifecycleOwner) { playlists ->
             if (currentFilter != "VIDEO") {
-                headerAiPlaylists.visibility = View.VISIBLE
-                (containerAiPlaylists.parent as? View)?.visibility = View.VISIBLE
+                layoutSectionEcho.visibility = View.VISIBLE
                 populateAiPlaylists(containerAiPlaylists, playlists)
             } else {
-                headerAiPlaylists.visibility = View.GONE
-                (containerAiPlaylists.parent as? View)?.visibility = View.GONE
+                layoutSectionEcho.visibility = View.GONE
             }
         }
 
         viewModel.videosData.observe(viewLifecycleOwner) { videos ->
             if (currentFilter != "MUSIC") {
-                headerVideos.visibility = View.VISIBLE
-                (containerVideos.parent as? View)?.visibility = View.VISIBLE
+                layoutSectionStellar.visibility = View.VISIBLE
                 populateVideos(containerVideos, videos)
             } else {
-                headerVideos.visibility = View.GONE
-                (containerVideos.parent as? View)?.visibility = View.GONE
+                layoutSectionStellar.visibility = View.GONE
             }
         }
 
@@ -179,19 +234,43 @@ class OrbitFragment : Fragment() {
         }
     }
 
+    private fun populateArtists(container: LinearLayout, artists: List<OrbitViewModel.ArtistCard>) {
+        container.removeAllViews()
+        val inflater = LayoutInflater.from(context)
+        artists.forEach { artist ->
+            val view = inflater.inflate(R.layout.item_orbit_card, container, false)
+            view.findViewById<TextView>(R.id.tv_title).text = artist.name
+            view.findViewById<TextView>(R.id.tv_subtitle).text = "${artist.songCount} Songs"
+            val img = view.findViewById<ImageView>(R.id.img_art)
+
+            // Check for Web Scraped URL
+            if (artist.imageUrl.isNotEmpty()) {
+                Glide.with(this)
+                    .load(artist.imageUrl)
+                    .transform(CenterCrop(), RoundedCorners(16))
+                    .transition(DrawableTransitionOptions.withCrossFade())
+                    .placeholder(R.drawable.default_album_art)
+                    .error(R.drawable.default_album_art)
+                    .into(img)
+            } else {
+                // Default until loaded
+                img.setImageResource(R.drawable.default_album_art)
+            }
+
+            view.setOnClickListener {
+                openArtistDetails(artist.name)
+            }
+            container.addView(view)
+        }
+    }
+
     private fun populateAiPlaylists(container: LinearLayout, playlists: List<OrbitViewModel.OrbitCard>) {
         container.removeAllViews()
         val inflater = LayoutInflater.from(context)
         playlists.forEach { card ->
             val view = inflater.inflate(R.layout.item_orbit_card, container, false)
-
-            // Set Title
             view.findViewById<TextView>(R.id.tv_title).text = card.title
-
-            // Set Tagline (Subtitle)
             view.findViewById<TextView>(R.id.tv_subtitle).text = card.tagline
-
-            // Load specific Image from Assets
             val img = view.findViewById<ImageView>(R.id.img_art)
             val assetPath = "file:///android_asset/playlists/${card.imageName}"
 
@@ -217,10 +296,8 @@ class OrbitFragment : Fragment() {
             view.findViewById<TextView>(R.id.video_title).text = video.title
             view.findViewById<TextView>(R.id.video_file_info).text = "Video"
             view.findViewById<TextView>(R.id.video_duration).text = SongUtils.formatDuration(video.duration)
-
             val img = view.findViewById<ImageView>(R.id.video_thumbnail)
             Glide.with(this).load(video.uri).transform(CenterCrop(), RoundedCorners(16)).into(img)
-
             view.setOnClickListener { playVideo(video) }
             container.addView(view)
         }
@@ -233,6 +310,15 @@ class OrbitFragment : Fragment() {
             tagline = card.tagline,
             imageName = card.imageName
         )
+        parentFragmentManager.commit {
+            setCustomAnimations(R.anim.slide_in_right, R.anim.slide_out_left, R.anim.slide_in_left, R.anim.slide_out_right)
+            replace(R.id.home_content_container, fragment)
+            addToBackStack(null)
+        }
+    }
+
+    private fun openArtistDetails(artistName: String) {
+        val fragment = OrbitArtistFragment.newInstance(artistName)
         parentFragmentManager.commit {
             setCustomAnimations(R.anim.slide_in_right, R.anim.slide_out_left, R.anim.slide_in_left, R.anim.slide_out_right)
             replace(R.id.home_content_container, fragment)
@@ -259,14 +345,12 @@ class OrbitFragment : Fragment() {
 
     private fun updateFilter(filter: String) {
         currentFilter = filter
-
         val activeCardColor = ContextCompat.getColor(requireContext(), R.color.colorSurface)
         val inactiveCardColor = ContextCompat.getColor(requireContext(), android.R.color.transparent)
 
         chipAll.setCardBackgroundColor(inactiveCardColor)
         chipMusic.setCardBackgroundColor(inactiveCardColor)
         chipVideo.setCardBackgroundColor(inactiveCardColor)
-
         chipAll.strokeWidth = 0
         chipMusic.strokeWidth = 0
         chipVideo.strokeWidth = 0
@@ -276,11 +360,8 @@ class OrbitFragment : Fragment() {
             "VIDEO" -> chipVideo
             else -> chipAll
         }
-
         activeChip.setCardBackgroundColor(activeCardColor)
         activeChip.strokeWidth = 2
-
-        // Trigger UI update manually to ensure visibility toggles immediately
         observeViewModel()
     }
 }

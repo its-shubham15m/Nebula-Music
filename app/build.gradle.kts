@@ -107,6 +107,7 @@ dependencies {
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.palette.ktx)
     implementation(libs.androidx.browser)
+    implementation(libs.androidx.swiperefreshlayout)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -150,4 +151,7 @@ dependencies {
 
     // Google Generative AI (Gemini)
     implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
+
+    // Web Scraping
+    implementation("org.jsoup:jsoup:1.17.2")
 }

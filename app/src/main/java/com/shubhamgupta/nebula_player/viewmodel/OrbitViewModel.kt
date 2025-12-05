@@ -1,6 +1,7 @@
 package com.shubhamgupta.nebula_player.viewmodel
 
 import android.app.Application
+import android.util.Log
 import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
@@ -16,8 +17,11 @@ import com.shubhamgupta.nebula_player.repository.VideoRepository
 import com.shubhamgupta.nebula_player.utils.PreferenceManager
 import com.shubhamgupta.nebula_player.utils.UserProfileManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.jsoup.Jsoup
 import java.util.Calendar
 
 class OrbitViewModel(application: Application) : AndroidViewModel(application) {
@@ -32,6 +36,9 @@ class OrbitViewModel(application: Application) : AndroidViewModel(application) {
     private val _aiPlaylists = MutableLiveData<List<OrbitCard>>() // AI Generated Playlists
     val aiPlaylists: LiveData<List<OrbitCard>> = _aiPlaylists
 
+    private val _artistData = MutableLiveData<List<ArtistCard>>() // Artist Data
+    val artistData: LiveData<List<ArtistCard>> = _artistData
+
     private val _videosData = MutableLiveData<List<Video>>()
     val videosData: LiveData<List<Video>> = _videosData
 
@@ -41,12 +48,23 @@ class OrbitViewModel(application: Application) : AndroidViewModel(application) {
     private val _isLoading = MutableLiveData<Boolean>()
     val isLoading: LiveData<Boolean> = _isLoading
 
+    // Flag to prevent auto-refresh on back navigation
+    var isDataLoaded = false
+
     // --- DETAILED PLAYLIST DATA ---
     private val _selectedPlaylistSongs = MutableLiveData<List<Song>>()
     val selectedPlaylistSongs: LiveData<List<Song>> = _selectedPlaylistSongs
 
-    private val _recommendedArtists = MutableLiveData<List<String>>() // For the bottom of detail page
-    val recommendedArtists: LiveData<List<String>> = _recommendedArtists
+    // Recommendations List
+    private val _recommendedSongs = MutableLiveData<List<Song>>()
+    val recommendedSongs: LiveData<List<Song>> = _recommendedSongs
+
+    // --- ARTIST DETAIL DATA ---
+    private val _selectedArtistImage = MutableLiveData<String>()
+    val selectedArtistImage: LiveData<String> = _selectedArtistImage
+
+    // --- CACHING VARIABLES ---
+    private var lastLoadedPlaylistTitle: String = ""
 
     // --- AI CONFIG ---
     private fun getApiKey(): String {
@@ -63,14 +81,22 @@ class OrbitViewModel(application: Application) : AndroidViewModel(application) {
     data class OrbitCard(
         val id: String,
         val title: String,
-        val tagline: String, // New Tagline field
-        val imageName: String, // Filename in assets/playlists/
-        val type: String, // "PLAYLIST_AI", "VIDEO", "SONG"
+        val tagline: String,
+        val imageName: String,
+        val type: String,
         val queryMood: String = "",
         val cachedSongIds: List<Long> = emptyList()
     )
 
-    fun loadOrbitData() {
+    data class ArtistCard(
+        val name: String,
+        val songCount: Int,
+        var imageUrl: String = ""
+    )
+
+    fun loadOrbitData(forceRefresh: Boolean = false) {
+        if (isDataLoaded && !forceRefresh) return
+
         updateGreeting()
         viewModelScope.launch {
             _isLoading.postValue(true)
@@ -84,7 +110,22 @@ class OrbitViewModel(application: Application) : AndroidViewModel(application) {
             val randomMix = allSongs.shuffled().take(10)
             _timeWarpData.postValue((favorites + randomMix).distinctBy { it.id }.take(15))
 
-            // 3. AI Playlists Cards (Updated based on Image)
+            // 3. Extract Artists
+            val sortedArtists = extractArtistsFromSongs(allSongs)
+            val topArtists = sortedArtists.take(15).shuffled()
+            _artistData.postValue(topArtists)
+
+            val artistsWithImages = withContext(Dispatchers.IO) {
+                topArtists.map { artist ->
+                    async {
+                        val url = fetchArtistImageFromWeb(artist.name)
+                        artist.copy(imageUrl = url)
+                    }
+                }.awaitAll()
+            }
+            _artistData.postValue(artistsWithImages)
+
+            // 4. AI Playlists Cards
             val suggestions = listOf(
                 OrbitCard("ai_1", "Bollywood Mush", "Sentimental B-Town hits", "bollywood_mush.png", "PLAYLIST_AI", "Bollywood, Romantic, Arijit Singh, Shreya Ghoshal, Soft, Hindi, Love"),
                 OrbitCard("ai_2", "1AM Feels", "For the late night thoughts", "1am_feels.png", "PLAYLIST_AI", "Sad, Lo-fi, Slow, Melancholic, Acoustic, Night, Lonely"),
@@ -98,28 +139,117 @@ class OrbitViewModel(application: Application) : AndroidViewModel(application) {
             )
             _aiPlaylists.postValue(suggestions)
 
-            // 4. Videos
+            // 5. Videos
             _videosData.postValue(allVideos.shuffled().take(15))
 
-            // 5. Last Watched
+            // 6. Last Watched
             if (allVideos.isNotEmpty()) {
                 _lastWatched.postValue(allVideos.first())
             }
 
+            isDataLoaded = true
             _isLoading.postValue(false)
         }
     }
 
-    fun loadPlaylistDetails(mood: String, title: String, forceRefresh: Boolean = false) {
+    private fun extractArtistsFromSongs(songs: List<Song>): List<ArtistCard> {
+        val artistMap = mutableMapOf<String, Int>()
+        val regex = Regex("[,&]|\\s+ft\\.?\\s+|\\s+feat\\.?\\s+", RegexOption.IGNORE_CASE)
+
+        songs.forEach { song ->
+            val rawArtist = song.artist ?: "Unknown"
+            if (rawArtist != "Unknown" && rawArtist != "<unknown>") {
+                val parts = rawArtist.split(regex)
+                parts.forEach { part ->
+                    val cleanName = part.trim()
+                    if (cleanName.length > 2 && !cleanName.all { it.isDigit() }) {
+                        artistMap[cleanName] = artistMap.getOrDefault(cleanName, 0) + 1
+                    }
+                }
+            }
+        }
+        return artistMap.map { ArtistCard(it.key, it.value) }.sortedByDescending { it.songCount }
+    }
+
+    // --- ARTIST FRAGMENT LOGIC ---
+
+    fun loadArtistDetails(artistName: String) {
         _isLoading.postValue(true)
+        _selectedArtistImage.postValue("")
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val allSongs = SongRepository.getAllSongs(getApplication())
+            val artistSongs = allSongs.filter { song ->
+                val raw = song.artist ?: ""
+                raw.contains(artistName, ignoreCase = true)
+            }
+
+            withContext(Dispatchers.Main) {
+                _selectedPlaylistSongs.postValue(artistSongs)
+            }
+
+            val imageUrl = fetchArtistImageFromWeb(artistName)
+            withContext(Dispatchers.Main) {
+                _selectedArtistImage.postValue(imageUrl)
+                _isLoading.postValue(false)
+            }
+        }
+    }
+
+    private fun fetchArtistImageFromWeb(artistName: String): String {
+        return try {
+            val query = "$artistName singer music artist"
+            val url = "https://www.bing.com/images/search?q=$query&first=1"
+
+            val doc = Jsoup.connect(url)
+                .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.60 Safari/537.36")
+                .timeout(5000)
+                .get()
+
+            val element = doc.select("img.mimg").first()
+            element?.attr("src") ?: ""
+        } catch (e: Exception) {
+            Log.e("OrbitViewModel", "Error scraping image: ${e.message}")
+            ""
+        }
+    }
+
+    // --- PLAYLIST LOGIC & RECOMMENDATIONS ---
+
+    fun loadPlaylistDetails(mood: String, title: String, forceRefresh: Boolean = false) {
+        // FIX: Check if we already have data for this title to prevent auto-refresh
+        if (!forceRefresh && title == lastLoadedPlaylistTitle && _selectedPlaylistSongs.value?.isNotEmpty() == true) {
+            return
+        }
+
+        lastLoadedPlaylistTitle = title
+        _isLoading.postValue(true)
+
         getOrGeneratePlaylist(mood, title, forceRefresh) { songs ->
             _selectedPlaylistSongs.postValue(songs)
 
-            // Generate dummy recommendations based on the song list artists
-            val artists = songs.mapNotNull { it.artist }.distinct().shuffled().take(5)
-            _recommendedArtists.postValue(artists)
+            viewModelScope.launch(Dispatchers.IO) {
+                val allSongs = SongRepository.getAllSongs(getApplication())
+                val playlistIds = songs.map { it.id }.toSet()
 
-            _isLoading.postValue(false)
+                val playlistArtists = songs.mapNotNull { it.artist }.distinct()
+
+                val similarSongs = allSongs.filter {
+                    !playlistIds.contains(it.id) && playlistArtists.any { artist -> it.artist?.contains(artist, true) == true }
+                }
+
+                val recommendations = if (similarSongs.size >= 10) {
+                    similarSongs.shuffled().take(10)
+                } else {
+                    val others = allSongs.filter { !playlistIds.contains(it.id) && !similarSongs.contains(it) }.shuffled()
+                    (similarSongs + others).take(10)
+                }
+
+                withContext(Dispatchers.Main) {
+                    _recommendedSongs.postValue(recommendations)
+                    _isLoading.postValue(false)
+                }
+            }
         }
     }
 
@@ -136,7 +266,6 @@ class OrbitViewModel(application: Application) : AndroidViewModel(application) {
                 val cachedIds = getCachedPlaylist(playlistTitle)
                 if (cachedIds.isNotEmpty()) {
                     val songs = SongRepository.getAllSongs(context).filter { cachedIds.contains(it.id) }
-                    // Only return cached if it has enough songs, otherwise regenerate
                     if (songs.size > 10) {
                         withContext(Dispatchers.Main) { callback(songs) }
                         return@launch
@@ -144,42 +273,25 @@ class OrbitViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
 
-            // AI Generation Logic
             val allSongs = SongRepository.getAllSongs(context)
-            // Increased token context limit
             val simplifiedSongList = allSongs.take(500).joinToString("\n") { "${it.id}|${it.title}|${it.artist}" }
 
             val currentKey = getApiKey()
             if (currentKey.isEmpty()) {
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(context, "Please set Gemini API Key in Settings", Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, "Please set Gemini API Key", Toast.LENGTH_LONG).show()
                     callback(allSongs.shuffled().take(40))
                 }
                 return@launch
             }
 
-            // --- PROFESSIONAL PROMPT UPDATE (Updated for 40 songs) ---
             val prompt = """
-                You are an expert music curator for a high-end streaming service. 
-                Your task is to curate a highly cohesive playlist based on a specific mood.
-                
-                Input Mood/Theme: '$mood'
-                
-                I have provided a local library of songs below in the format: 'ID|Title|Artist'.
-                
-                Instructions:
-                1. Select 40 to 50 songs from the list that BEST match the requested mood.
-                2. Prioritize "Vibe Consistency" - ensure the songs flow well together.
-                3. If the mood implies a specific genre (e.g., "Bollywood"), prioritize songs from that genre or artist.
-                4. Return ONLY a raw JSON array of the song IDs (integers/longs).
-                5. Do NOT include markdown formatting (like ```json), explanations, or song titles. Just the array.
-                
-                Local Library:
-                $simplifiedSongList
+                You are an expert music curator. Input Mood: '$mood'
+                Local Library: $simplifiedSongList
+                Select 40 songs matching the mood. Return ONLY JSON array of IDs.
             """.trimIndent()
 
             try {
-                // Use dynamic generative model with user key
                 val model = getGenerativeModel()
                 val response = model.generateContent(prompt)
                 val responseText = response.text?.replace("```json", "")?.replace("```", "")?.trim()
@@ -190,14 +302,10 @@ class OrbitViewModel(application: Application) : AndroidViewModel(application) {
                 savePlaylistToCache(playlistTitle, ids)
                 withContext(Dispatchers.Main) { callback(matchedSongs) }
             } catch (e: Exception) {
-                // Fallback: Smart local filtering if AI fails
                 val keywords = mood.split(", ")
                 val fallback = allSongs.filter { s ->
-                    keywords.any { k ->
-                        s.title.contains(k, true) || (s.artist?.contains(k, true) == true)
-                    }
-                }.take(40) // Increased fallback limit
-
+                    keywords.any { k -> s.title.contains(k, true) || (s.artist?.contains(k, true) == true) }
+                }.take(40)
                 withContext(Dispatchers.Main) {
                     callback(if(fallback.isNotEmpty()) fallback else allSongs.shuffled().take(40))
                 }
@@ -210,7 +318,7 @@ class OrbitViewModel(application: Application) : AndroidViewModel(application) {
             val allSongs = SongRepository.getAllSongs(getApplication())
             val similar = allSongs.filter {
                 (it.artist == seedSong.artist && it.id != seedSong.id)
-            }.shuffled().take(39).toMutableList() // Increased to match new length preference
+            }.shuffled().take(39).toMutableList()
             similar.add(0, seedSong)
             withContext(Dispatchers.Main) { callback(similar) }
         }
@@ -224,11 +332,7 @@ class OrbitViewModel(application: Application) : AndroidViewModel(application) {
             in 17..20 -> "Good Evening"
             else -> "Late Night"
         }
-
-        val userName = try {
-            UserProfileManager.getUserName(getApplication())
-        } catch (e: Exception) { "User" }
-
+        val userName = try { UserProfileManager.getUserName(getApplication()) } catch (e: Exception) { "User" }
         _greeting.postValue("$timeMsg, $userName")
     }
 
