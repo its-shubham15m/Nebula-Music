@@ -23,13 +23,13 @@ class HomePageFragment : Fragment() {
     private var activeFragment: Fragment? = null
 
     // Tags for child fragments
-    private val TAG_AUDIO = "audio_page"
+    private val TAG_MUSIC = "music_page"
     private val TAG_VIDEO = "video_page"
     private val TAG_SEARCH = "search_page"
     private val TAG_ORBIT = "orbit_page"
 
-    // Store the current tab ID. Default to Audio.
-    private var currentTabId: Int = R.id.nav_audio
+    // Store the current tab ID. Default to Music.
+    private var currentTabId: Int = R.id.nav_music
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -88,8 +88,8 @@ class HomePageFragment : Fragment() {
                     val fragment = childFragmentManager.findFragmentByTag(TAG_SEARCH) as? SearchFragment
                     fragment?.focusSearchInput()
                 }
-                R.id.nav_audio -> {
-                    val fragment = childFragmentManager.findFragmentByTag(TAG_AUDIO) as? MusicPageFragment
+                R.id.nav_music -> {
+                    val fragment = childFragmentManager.findFragmentByTag(TAG_MUSIC) as? MusicPageFragment
                     fragment?.switchToSongsTab()
                 }
             }
@@ -97,7 +97,7 @@ class HomePageFragment : Fragment() {
 
         // Restore state if available
         if (savedInstanceState != null) {
-            currentTabId = savedInstanceState.getInt("LAST_SELECTED_TAB", R.id.nav_audio)
+            currentTabId = savedInstanceState.getInt("LAST_SELECTED_TAB", R.id.nav_music)
         }
 
         // FIX: Manually load the fragment for the current tab.
@@ -118,8 +118,8 @@ class HomePageFragment : Fragment() {
 
     private fun handleTabSelection(itemId: Int) {
         when (itemId) {
-            R.id.nav_audio -> {
-                switchFragment(TAG_AUDIO) { MusicPageFragment.newInstance() }
+            R.id.nav_music -> {
+                switchFragment(TAG_MUSIC) { MusicPageFragment.newInstance() }
                 setMiniPlayerVisible(true)
                 (requireActivity() as? MainActivity)?.setDrawerLocked(false)
             }
