@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.app.Dialog
 import android.app.PictureInPictureParams
 import android.content.Context
+import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.content.res.Configuration
@@ -49,11 +50,13 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.C
+import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.text.CueGroup
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.session.MediaSession
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import androidx.media3.exoplayer.ExoPlayer
@@ -73,8 +76,13 @@ class VideoPlayerActivity : AppCompatActivity() {
 
     // ExoPlayer Components
     private lateinit var playerView: PlayerView
-    private var player: ExoPlayer? = null
+    // CHANGED: Use Player interface to support ForwardingPlayer wrapper
+    private var player: Player? = null
+    // Keep reference to ExoPlayer for specific builder needs if necessary, though mostly handled inside initialize
     private var trackSelector: DefaultTrackSelector? = null
+
+    // NEW: MediaSession to handle PiP controls and audio focus conflicts
+    private var mediaSession: MediaSession? = null
 
     // Views
     private lateinit var titleView: TextView
@@ -207,8 +215,12 @@ class VideoPlayerActivity : AppCompatActivity() {
             }
         })
 
-        val initialVideoId = intent.getLongExtra("VIDEO_ID", -1L)
-        loadVideoList(initialVideoId)
+        if (intent?.action == Intent.ACTION_VIEW && intent.data != null) {
+            handleExternalVideo(intent.data!!)
+        } else {
+            val initialVideoId = intent.getLongExtra("VIDEO_ID", -1L)
+            loadVideoList(initialVideoId)
+        }
 
         setupClickListeners()
         setupHoldToSeek()
@@ -308,47 +320,79 @@ class VideoPlayerActivity : AppCompatActivity() {
     private fun initializePlayer() {
         if (player == null) {
             trackSelector = DefaultTrackSelector(this)
-            player = ExoPlayer.Builder(this)
+
+            // Build the core ExoPlayer
+            val exoPlayer = ExoPlayer.Builder(this)
                 .setTrackSelector(trackSelector!!)
                 .build()
-                .apply {
-                    playerView.player = this
-                    playerView.useController = false
 
-                    addListener(object : Player.Listener {
-                        override fun onPlaybackStateChanged(state: Int) {
-                            if (state == Player.STATE_READY) {
-                                if (duration > 0) {
-                                    totalTimeView.text = formatDuration(duration)
-                                    seekBar.max = duration.toInt()
-                                }
-                                handler.post(updateProgressAction)
-                                applyAspectRatio()
-                                checkResumeStatus()
-                            } else if (state == Player.STATE_ENDED) {
-                                playNextVideo()
-                            }
-                        }
-
-                        override fun onIsPlayingChanged(isPlaying: Boolean) {
-                            playPauseButton.setImageResource(if (isPlaying) R.drawable.ic_pausen else R.drawable.ic_playn)
-                            if (isPlaying) resetAutoHideTimer()
-                            else {
-                                handler.removeCallbacks(hideControlsRunnable)
-                                showSystemUI()
-                            }
-                        }
-
-                        override fun onCues(cueGroup: CueGroup) {
-                            if (cueGroup.cues.isNotEmpty()) {
-                                subtitleView.text = cueGroup.cues.joinToString("\n") { it.text ?: "" }
-                                subtitleView.visibility = View.VISIBLE
-                            } else {
-                                subtitleView.visibility = View.GONE
-                            }
-                        }
-                    })
+            // WRAP WITH FORWARDING PLAYER to intercept MediaSession commands (PiP/Headset)
+            player = object : ForwardingPlayer(exoPlayer) {
+                override fun seekToNext() {
+                    // Trigger our custom navigation logic
+                    playNextVideo()
                 }
+
+                override fun seekToPrevious() {
+                    // Trigger our custom previous logic
+                    handlePrevious()
+                }
+
+                override fun getAvailableCommands(): Player.Commands {
+                    // Explicitly tell MediaSession that NEXT and PREVIOUS are available
+                    return super.getAvailableCommands().buildUpon()
+                        .add(Player.COMMAND_SEEK_TO_NEXT)
+                        .add(Player.COMMAND_SEEK_TO_PREVIOUS)
+                        .build()
+                }
+
+                override fun isCommandAvailable(command: Int): Boolean {
+                    return command == Player.COMMAND_SEEK_TO_NEXT ||
+                            command == Player.COMMAND_SEEK_TO_PREVIOUS ||
+                            super.isCommandAvailable(command)
+                }
+            }
+
+            playerView.player = player
+            playerView.useController = false
+
+            player?.addListener(object : Player.Listener {
+                override fun onPlaybackStateChanged(state: Int) {
+                    if (state == Player.STATE_READY) {
+                        val duration = player?.duration ?: 0
+                        if (duration > 0) {
+                            totalTimeView.text = formatDuration(duration)
+                            seekBar.max = duration.toInt()
+                        }
+                        handler.post(updateProgressAction)
+                        applyAspectRatio()
+                        checkResumeStatus()
+                    } else if (state == Player.STATE_ENDED) {
+                        playNextVideo()
+                    }
+                }
+
+                override fun onIsPlayingChanged(isPlaying: Boolean) {
+                    playPauseButton.setImageResource(if (isPlaying) R.drawable.ic_pausen else R.drawable.ic_playn)
+                    if (isPlaying) resetAutoHideTimer()
+                    else {
+                        handler.removeCallbacks(hideControlsRunnable)
+                        showSystemUI()
+                    }
+                }
+
+                override fun onCues(cueGroup: CueGroup) {
+                    if (cueGroup.cues.isNotEmpty()) {
+                        subtitleView.text = cueGroup.cues.joinToString("\n") { it.text ?: "" }
+                        subtitleView.visibility = View.VISIBLE
+                    } else {
+                        subtitleView.visibility = View.GONE
+                    }
+                }
+            })
+
+            // CREATE MEDIA SESSION to steal focus and handle PiP controls
+            mediaSession = MediaSession.Builder(this, player!!).build()
         }
     }
 
@@ -369,7 +413,6 @@ class VideoPlayerActivity : AppCompatActivity() {
         dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
 
         // CLICK OUTSIDE TO DISMISS LOGIC
-        // We look for the root layout ID 'background_overlay' added to all XMLs
         view.findViewById<View>(R.id.background_overlay)?.setOnClickListener {
             dialog.dismiss()
         }
@@ -390,6 +433,8 @@ class VideoPlayerActivity : AppCompatActivity() {
 
         val p = player ?: return
         val videoId = videoList.getOrNull(currentVideoIndex)?.id ?: return
+        if (videoId == -1L) return
+
         val savedPos = PreferenceManager.getVideoResumePosition(this, videoId)
 
         if (savedPos > 5000 && savedPos < p.duration - 5000) {
@@ -450,7 +495,7 @@ class VideoPlayerActivity : AppCompatActivity() {
         player?.let {
             if (it.currentPosition > 0 && currentVideoUri != null) {
                 val prevId = videoList.find { v -> v.uri == currentVideoUri }?.id
-                if (prevId != null) {
+                if (prevId != null && prevId != -1L) {
                     PreferenceManager.saveVideoResumePosition(this, prevId, it.currentPosition)
                 }
             }
@@ -511,10 +556,11 @@ class VideoPlayerActivity : AppCompatActivity() {
                 var width = 16
                 var height = 9
 
-                val videoFormat = player?.videoFormat
-                if (videoFormat != null && videoFormat.width > 0 && videoFormat.height > 0) {
-                    width = videoFormat.width
-                    height = videoFormat.height
+                // CHANGED: Use videoSize from Player interface
+                val videoSize = player?.videoSize
+                if (videoSize != null && videoSize.width > 0 && videoSize.height > 0) {
+                    width = videoSize.width
+                    height = videoSize.height
                 } else if (playerView.width > 0 && playerView.height > 0) {
                     width = playerView.width
                     height = playerView.height
@@ -525,7 +571,6 @@ class VideoPlayerActivity : AppCompatActivity() {
 
                 var ratio = width.toFloat() / height.toFloat()
 
-                // Clamp Ratio for Android PiP
                 if (ratio < 0.418410f) {
                     width = 9
                     height = 21
@@ -586,7 +631,7 @@ class VideoPlayerActivity : AppCompatActivity() {
     }
 
     // ===============================================
-    // DIALOG IMPLEMENTATIONS (Using createPlayerDialog)
+    // DIALOG IMPLEMENTATIONS
     // ===============================================
 
     private fun showOrientationDialog() {
@@ -614,7 +659,6 @@ class VideoPlayerActivity : AppCompatActivity() {
     private fun showAspectRatioDialog() {
         val (dialog, view) = createPlayerDialog(R.layout.dialog_aspect_ratio)
 
-        // Helper to setup clicks
         fun setMode(id: Int, mode: AspectRatioMode, value: Float = 0f) {
             view.findViewById<View>(id).setOnClickListener {
                 currentAspectRatioMode = mode
@@ -633,15 +677,16 @@ class VideoPlayerActivity : AppCompatActivity() {
         setMode(R.id.btn_ar_4_3, AspectRatioMode.CUSTOM, 4f/3f)
         setMode(R.id.btn_ar_16_10, AspectRatioMode.CUSTOM, 16f/10f)
         setMode(R.id.btn_ar_cinema, AspectRatioMode.CUSTOM, 2.35f)
-        setMode(R.id.btn_ar_18_9, AspectRatioMode.CUSTOM, 2f) // Approx 18:9
+        setMode(R.id.btn_ar_18_9, AspectRatioMode.CUSTOM, 2f)
 
         dialog.show()
     }
 
     private fun applyAspectRatio() {
         val p = player ?: return
-        val format = p.videoFormat ?: return
-        if (format.width == 0 || format.height == 0) return
+        // CHANGED: Use videoSize from Player interface
+        val videoSize = p.videoSize
+        if (videoSize.width == 0 || videoSize.height == 0) return
 
         val viewWidth = findViewById<View>(R.id.root_layout).width
         val viewHeight = findViewById<View>(R.id.root_layout).height
@@ -689,55 +734,37 @@ class VideoPlayerActivity : AppCompatActivity() {
 
         val (dialog, view) = createPlayerDialog(R.layout.dialog_audio_subtitle)
 
-        // FLIPPER SETUP
         val viewFlipper = view.findViewById<ViewFlipper>(R.id.view_flipper)
         val audioContainer = view.findViewById<LinearLayout>(R.id.container_audio_tracks)
         val subtitleContainer = view.findViewById<LinearLayout>(R.id.container_subtitle_tracks)
         val settingsBtn = view.findViewById<View>(R.id.btn_open_sub_settings)
 
-        // --- DEFINE SLIDE ANIMATIONS PROGRAMMATICALLY ---
-        // Right-To-Left (Enter Subtitle Settings)
         val inFromRight = TranslateAnimation(
-            Animation.RELATIVE_TO_PARENT, 1.0f,
-            Animation.RELATIVE_TO_PARENT, 0.0f,
-            Animation.RELATIVE_TO_PARENT, 0.0f,
-            Animation.RELATIVE_TO_PARENT, 0.0f
+            Animation.RELATIVE_TO_PARENT, 1.0f, Animation.RELATIVE_TO_PARENT, 0.0f,
+            Animation.RELATIVE_TO_PARENT, 0.0f, Animation.RELATIVE_TO_PARENT, 0.0f
         ).apply { duration = 300 }
 
         val outToLeft = TranslateAnimation(
-            Animation.RELATIVE_TO_PARENT, 0.0f,
-            Animation.RELATIVE_TO_PARENT, -1.0f,
-            Animation.RELATIVE_TO_PARENT, 0.0f,
-            Animation.RELATIVE_TO_PARENT, 0.0f
+            Animation.RELATIVE_TO_PARENT, 0.0f, Animation.RELATIVE_TO_PARENT, -1.0f,
+            Animation.RELATIVE_TO_PARENT, 0.0f, Animation.RELATIVE_TO_PARENT, 0.0f
         ).apply { duration = 300 }
 
-        // Left-To-Right (Back to Tracks)
         val inFromLeft = TranslateAnimation(
-            Animation.RELATIVE_TO_PARENT, -1.0f,
-            Animation.RELATIVE_TO_PARENT, 0.0f,
-            Animation.RELATIVE_TO_PARENT, 0.0f,
-            Animation.RELATIVE_TO_PARENT, 0.0f
+            Animation.RELATIVE_TO_PARENT, -1.0f, Animation.RELATIVE_TO_PARENT, 0.0f,
+            Animation.RELATIVE_TO_PARENT, 0.0f, Animation.RELATIVE_TO_PARENT, 0.0f
         ).apply { duration = 300 }
 
         val outToRight = TranslateAnimation(
-            Animation.RELATIVE_TO_PARENT, 0.0f,
-            Animation.RELATIVE_TO_PARENT, 1.0f,
-            Animation.RELATIVE_TO_PARENT, 0.0f,
-            Animation.RELATIVE_TO_PARENT, 0.0f
+            Animation.RELATIVE_TO_PARENT, 0.0f, Animation.RELATIVE_TO_PARENT, 1.0f,
+            Animation.RELATIVE_TO_PARENT, 0.0f, Animation.RELATIVE_TO_PARENT, 0.0f
         ).apply { duration = 300 }
 
-        // Open Subtitle Settings (Slide In)
         settingsBtn.setOnClickListener {
             viewFlipper.inAnimation = inFromRight
             viewFlipper.outAnimation = outToLeft
             viewFlipper.showNext()
         }
 
-        // ============================================================
-        //  PAGE 1: TRACKS LOGIC
-        // ============================================================
-
-        // Logic to generate view items for tracks
         fun createTrackItem(label: String, isSelected: Boolean, onClick: () -> Unit): View {
             val textView = TextView(this)
             textView.text = label
@@ -752,7 +779,6 @@ class VideoPlayerActivity : AppCompatActivity() {
             return textView
         }
 
-        // --- POPULATE AUDIO ---
         var hasAudio = false
         for (groupIndex in 0 until tracks.groups.size) {
             val group = tracks.groups[groupIndex]
@@ -785,7 +811,6 @@ class VideoPlayerActivity : AppCompatActivity() {
             audioContainer.addView(emptyInfo)
         }
 
-        // --- POPULATE SUBTITLES ---
         val isSubsDisabled = p.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_TEXT)
 
         subtitleContainer.addView(createTrackItem("Off", isSubsDisabled) {
@@ -821,24 +846,16 @@ class VideoPlayerActivity : AppCompatActivity() {
             }
         }
 
-        // ============================================================
-        //  PAGE 2: SETTINGS LOGIC
-        // ============================================================
-
         var settings = PreferenceManager.getSubtitleSettings(this)
-
-        // --- Controls ---
         val seekSize = view.findViewById<SeekBar>(R.id.seek_font_size)
         val rgColor = view.findViewById<RadioGroup>(R.id.rg_text_color)
         val rgOpacity = view.findViewById<RadioGroup>(R.id.rg_opacity)
         val seekPos = view.findViewById<SeekBar>(R.id.seek_position)
         val btnBack = view.findViewById<Button>(R.id.btn_back_to_tracks)
 
-        // --- Init Values ---
         seekSize.progress = settings.fontSize
         seekPos.progress = (settings.bottomPadding * 100).toInt()
 
-        // Init Color Selection
         when(settings.textColor) {
             Color.WHITE -> rgColor.check(R.id.tc_white)
             Color.YELLOW -> rgColor.check(R.id.tc_yellow)
@@ -847,7 +864,6 @@ class VideoPlayerActivity : AppCompatActivity() {
             else -> rgColor.check(R.id.tc_white)
         }
 
-        // Init Opacity Selection
         when(settings.bgOpacity) {
             0 -> rgOpacity.check(R.id.btn_op_0)
             25 -> rgOpacity.check(R.id.btn_op_25)
@@ -857,7 +873,6 @@ class VideoPlayerActivity : AppCompatActivity() {
             else -> rgOpacity.check(R.id.btn_op_0)
         }
 
-        // --- Listeners ---
         seekSize.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(s: SeekBar?, p: Int, f: Boolean) { settings = settings.copy(fontSize = p.coerceAtLeast(10)) }
             override fun onStartTrackingTouch(s: SeekBar?) {}
@@ -891,7 +906,6 @@ class VideoPlayerActivity : AppCompatActivity() {
             settings = settings.copy(bgOpacity = opacity)
         }
 
-        // Back to Tracks + Save (Slide Back)
         btnBack.setOnClickListener {
             PreferenceManager.saveSubtitleSettings(this, settings)
             applySubtitleSettings()
@@ -906,7 +920,6 @@ class VideoPlayerActivity : AppCompatActivity() {
     private fun showOptionsDialog() {
         val (dialog, view) = createPlayerDialog(R.layout.dialog_player_options)
 
-        // Show Current Speed
         val currentSpeed = player?.playbackParameters?.speed ?: 1.0f
         view.findViewById<TextView>(R.id.txt_current_speed).text = "${currentSpeed}x"
 
@@ -988,19 +1001,16 @@ class VideoPlayerActivity : AppCompatActivity() {
 
     @SuppressLint("ClickableViewAccessibility")
     private fun setupGestures() {
-        // Scale Gesture for Aspect Ratio
         scaleGestureDetector = ScaleGestureDetector(this, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
             override fun onScale(detector: ScaleGestureDetector): Boolean {
                 if (isLocked) return false
                 val factor = detector.scaleFactor
                 if (factor > 1.1f && currentAspectRatioMode != AspectRatioMode.FILL) {
-                    // Zoom In -> Fill
                     currentAspectRatioMode = AspectRatioMode.FILL
                     applyAspectRatio()
                     showRatioChip("Fill Screen")
                     return true
                 } else if (factor < 0.9f && currentAspectRatioMode != AspectRatioMode.BEST_FIT) {
-                    // Zoom Out -> Best Fit
                     currentAspectRatioMode = AspectRatioMode.BEST_FIT
                     applyAspectRatio()
                     showRatioChip("Original")
@@ -1021,9 +1031,9 @@ class VideoPlayerActivity : AppCompatActivity() {
                 val x = e.x
 
                 if (x < width * 0.35) {
-                    seekRelative(-10000) // Double tap left: Rewind 10s
+                    seekRelative(-10000)
                 } else if (x > width * 0.65) {
-                    seekRelative(10000) // Double tap right: Forward 10s
+                    seekRelative(10000)
                 } else {
                     if (player!!.isPlaying) player!!.pause() else player!!.play()
                 }
@@ -1064,7 +1074,7 @@ class VideoPlayerActivity : AppCompatActivity() {
         })
 
         touchOverlay.setOnTouchListener { _, event ->
-            scaleGestureDetector.onTouchEvent(event) // Handle Scale First
+            scaleGestureDetector.onTouchEvent(event)
             if (scaleGestureDetector.isInProgress) return@setOnTouchListener true
 
             if (event.action == MotionEvent.ACTION_UP || event.action == MotionEvent.ACTION_CANCEL) {
@@ -1293,7 +1303,7 @@ class VideoPlayerActivity : AppCompatActivity() {
         player?.let {
             if (currentVideoUri != null) {
                 val id = videoList.getOrNull(currentVideoIndex)?.id
-                if (id != null) PreferenceManager.saveVideoResumePosition(this, id, it.currentPosition)
+                if (id != null && id != -1L) PreferenceManager.saveVideoResumePosition(this, id, it.currentPosition)
             }
             if (!isFinishing && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 // Do nothing
@@ -1321,8 +1331,51 @@ class VideoPlayerActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        // RELEASE MEDIA SESSION
+        mediaSession?.release()
+        mediaSession = null
+
         player?.release()
         player = null
         handler.removeCallbacksAndMessages(null)
+    }
+
+    private fun handleExternalVideo(uri: Uri) {
+        val tempVideo = Video(
+            id = -1L,
+            title = "External Video",
+            duration = 0L,
+            size = 0L,
+            path = uri.toString(),
+            uri = uri,
+            dateAdded = System.currentTimeMillis(),
+            resolution = "Unknown"
+        )
+
+        initializePlayer()
+        videoList = listOf(tempVideo)
+        currentVideoIndex = 0
+
+        CoroutineScope(Dispatchers.IO).launch {
+            var finalTitle = "External Video"
+            try {
+                contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                        if (nameIndex != -1) {
+                            finalTitle = cursor.getString(nameIndex)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("VideoPlayerActivity", "Error loading external title", e)
+            }
+
+            withContext(Dispatchers.Main) {
+                val updatedVideo = tempVideo.copy(title = finalTitle)
+                videoList = listOf(updatedVideo)
+                playVideo(updatedVideo)
+            }
+        }
     }
 }

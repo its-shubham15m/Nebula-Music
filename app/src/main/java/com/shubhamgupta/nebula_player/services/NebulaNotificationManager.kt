@@ -116,7 +116,7 @@ class NebulaNotificationManager(private val context: Context) {
         val largeImage = BitmapFactory.decodeResource(context.resources, R.drawable.default_album_art)
 
         val notification = NotificationCompat.Builder(context, ENGAGEMENT_CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_music_note)
+            .setSmallIcon(R.drawable.ic_music_note_selected)
             .setContentTitle(title)
             .setContentText(message)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
@@ -147,7 +147,7 @@ class NebulaNotificationManager(private val context: Context) {
         )
 
         val notification = NotificationCompat.Builder(context, ENGAGEMENT_CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_music_note) // Ensure you have a generic icon or use R.drawable.default_album_art
+            .setSmallIcon(R.drawable.ic_music_note_selected) // Ensure you have a generic icon or use R.drawable.default_album_art
             .setContentTitle("Nebula Player")
             .setContentText(message)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)

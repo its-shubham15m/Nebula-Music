@@ -380,7 +380,7 @@ class SettingsFragment : Fragment() {
                 Glide.with(context)
                     .load(Uri.parse(loadPath))
                     .placeholder(R.drawable.default_album_art)
-                    .error(R.drawable.default_album_art)
+                    .error(R.drawable.app_icon)
                     .into(imageView)
 
                 itemView.setOnClickListener {

@@ -252,9 +252,9 @@ class MainActivity : AppCompatActivity() {
         isShowingPermissionDialog = true
 
         val permissionMessage = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            "Nebula Music needs access to your audio and video files to play music, create playlists, show videos, and manage your library.\n\nThis permission allows the app to:\n• Browse and play your music and videos\n• Create and manage playlists\n• Display album art and song information\n• Remember your playback preferences"
+            "Nebula Player needs access to your audio and video files to play music, create playlists, show videos, and manage your library.\n\nThis permission allows the app to:\n• Browse and play your music and videos\n• Create and manage playlists\n• Display album art and song information\n• Remember your playback preferences"
         } else {
-            "Nebula Music needs access to your storage to play music and videos, create playlists, and manage your library.\n\nThis permission allows the app to:\n• Browse and play your music files\n• Create and manage playlists\n• Display album art and song information\n• Remember your playback preferences"
+            "Nebula Player needs access to your storage to play music and videos, create playlists, and manage your library.\n\nThis permission allows the app to:\n• Browse and play your music files\n• Create and manage playlists\n• Display album art and song information\n• Remember your playback preferences"
         }
 
         AlertDialog.Builder(this)
@@ -308,9 +308,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun showPermissionDeniedDialog() {
         val deniedMessage = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            "You've denied access to your media files. Without this permission, Nebula Music cannot:\n\n• Play your music or videos\n• Create playlists\n• Display your library\n• Save your preferences\n\nYou can grant permission in Settings or continue with limited functionality."
+            "You've denied access to your media files. Without this permission, Nebula Player cannot:\n\n• Play your music or videos\n• Create playlists\n• Display your library\n• Save your preferences\n\nYou can grant permission in Settings or continue with limited functionality."
         } else {
-            "You've denied access to your storage. Without this permission, Nebula Music cannot:\n\n• Play your music or videos\n• Create playlists\n• Display your library\n• Save your preferences\n\nYou can grant permission in Settings or continue with limited functionality."
+            "You've denied access to your storage. Without this permission, Nebula Player cannot:\n\n• Play your music or videos\n• Create playlists\n• Display your library\n• Save your preferences\n\nYou can grant permission in Settings or continue with limited functionality."
         }
 
         AlertDialog.Builder(this)
@@ -1202,9 +1202,26 @@ class MainActivity : AppCompatActivity() {
     private fun handleIntent(intent: Intent?) {
         if (intent?.action == Intent.ACTION_VIEW) {
             val uri: Uri? = intent.data
-            if (uri != null && bound && musicService != null) {
-                playExternalUri(uri)
-                handler.postDelayed({ forceRefreshCurrentFragment() }, 1000)
+            if (uri != null) {
+                // Determine the MIME type
+                val mimeType = intent.resolveType(this) ?: contentResolver.getType(uri)
+
+                if (mimeType != null && mimeType.startsWith("video/")) {
+                    // It's a VIDEO: Launch VideoPlayerActivity
+                    val videoIntent = Intent(this, VideoPlayerActivity::class.java).apply {
+                        action = Intent.ACTION_VIEW
+                        data = uri
+                        // Pass title if available, otherwise it defaults in Player
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    startActivity(videoIntent)
+                } else {
+                    // It's AUDIO: Use existing logic
+                    if (bound && musicService != null) {
+                        playExternalUri(uri)
+                        handler.postDelayed({ forceRefreshCurrentFragment() }, 1000)
+                    }
+                }
             }
         }
     }
