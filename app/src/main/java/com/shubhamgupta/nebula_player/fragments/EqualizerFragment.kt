@@ -13,6 +13,7 @@ import android.widget.*
 import androidx.fragment.app.Fragment
 import androidx.appcompat.widget.SwitchCompat
 import com.google.android.material.card.MaterialCardView
+import com.shubhamgupta.nebula_player.MainActivity
 import com.shubhamgupta.nebula_player.R
 import com.shubhamgupta.nebula_player.service.MusicService
 import com.shubhamgupta.nebula_player.utils.EqualizerManager
@@ -94,6 +95,8 @@ class EqualizerFragment : Fragment() {
         super.onResume()
         // Refresh UI with current settings
         loadCurrentSettings()
+        // Fix: Lock the sidebar drawer when this fragment is active
+        (activity as? MainActivity)?.setDrawerLocked(true)
     }
 
     override fun onStart() {

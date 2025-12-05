@@ -634,14 +634,17 @@ class MainActivity : AppCompatActivity() {
                 "settings_page" -> {
                     currentFragment = "settings"
                     isMiniPlayerAllowed = false
+                    setDrawerLocked(true) // FIX: Lock drawer
                 }
                 "equalizer_page" -> {
                     currentFragment = "equalizer"
                     isMiniPlayerAllowed = false
+                    setDrawerLocked(true) // FIX: Lock drawer
                 }
                 "about_page" -> {
                     currentFragment = "about"
                     isMiniPlayerAllowed = false
+                    setDrawerLocked(true) // FIX: Lock drawer
                 }
                 "search_page" -> {
                     currentFragment = "search"
@@ -656,7 +659,7 @@ class MainActivity : AppCompatActivity() {
                 "user_activity_page" -> {
                     currentFragment = "user_activity"
                     isMiniPlayerAllowed = false
-                    setDrawerLocked(false)
+                    setDrawerLocked(true) // FIX: Lock drawer
                 }
             }
         }

@@ -13,6 +13,7 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import com.bumptech.glide.Glide
 import com.google.android.material.button.MaterialButtonToggleGroup
+import com.shubhamgupta.nebula_player.MainActivity
 import com.shubhamgupta.nebula_player.R
 import com.shubhamgupta.nebula_player.utils.UserActivityHistory
 import com.shubhamgupta.nebula_player.utils.UserActivityManager
@@ -65,6 +66,12 @@ class UserActivityFragment : Fragment() {
                 }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Fix: Lock the sidebar drawer when this fragment is active
+        (activity as? MainActivity)?.setDrawerLocked(true)
     }
 
     private fun loadChartData(isWeekly: Boolean) {

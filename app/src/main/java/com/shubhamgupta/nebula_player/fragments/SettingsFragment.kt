@@ -76,6 +76,12 @@ class SettingsFragment : Fragment() {
         setupGeneralSettings(view)
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Fix: Lock the sidebar drawer when this fragment is active
+        (activity as? MainActivity)?.setDrawerLocked(true)
+    }
+
     private fun setupToolbar(view: View) {
         view.findViewById<View>(R.id.btn_back)?.setOnClickListener {
             parentFragmentManager.popBackStack()

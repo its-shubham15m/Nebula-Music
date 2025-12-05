@@ -59,6 +59,12 @@ class OrbitArtistFragment : Fragment() {
         viewModel.loadArtistDetails(artistName)
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Fix: Lock the sidebar drawer when this fragment is active
+        (activity as? MainActivity)?.setDrawerLocked(true)
+    }
+
     private fun setupUI(view: View) {
         view.findViewById<View>(R.id.btn_back).setOnClickListener {
             parentFragmentManager.popBackStack()
