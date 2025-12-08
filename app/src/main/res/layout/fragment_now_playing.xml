@@ -7,7 +7,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:fitsSystemWindows="false"
-    android:background="@android:color/transparent">
+    android:background="@color/colorBackground">
 
     <ImageView
         android:id="@+id/background_gradient"
@@ -60,7 +60,6 @@
             android:layout_height="0dp"
             android:layout_weight="1" />
 
-        <!-- NEW: Audio Output Button -->
         <ImageButton
             android:id="@+id/btn_audio_output"
             android:layout_width="48dp"
@@ -90,7 +89,7 @@
             android:padding="12dp"
             app:tint="@color/white"
             android:contentDescription="Song Details"
- />
+            />
     </LinearLayout>
 
     <androidx.constraintlayout.widget.ConstraintLayout
@@ -116,7 +115,6 @@
             app:layout_constraintWidth_max="400dp"
             android:contentDescription="Album Art"/>
 
-        <!-- Main Song Title -->
         <TextView
             android:id="@+id/song_title"
             android:layout_width="0dp"
@@ -136,7 +134,6 @@
             app:layout_constraintEnd_toEndOf="parent"
             tools:text="Song Title" />
 
-        <!-- Main Song Artist -->
         <TextView
             android:id="@+id/song_artist"
             android:layout_width="0dp"
@@ -155,7 +152,6 @@
             app:layout_constraintEnd_toEndOf="parent"
             tools:text="Artist Name" />
 
-        <!-- Main Song Details -->
         <TextView
             android:id="@+id/song_details"
             android:layout_width="0dp"
@@ -260,7 +256,6 @@
     </androidx.cardview.widget.CardView>
 
 
-    <!-- FIXED HEIGHT set to 64dp to prevent SeekBar jump when content swaps -->
     <LinearLayout
         android:id="@+id/middle_controls"
         android:layout_width="match_parent"
@@ -272,7 +267,6 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <!-- Icon for Now Playing (Left of Text) -->
         <ImageView
             android:id="@+id/iv_now_playing_icon"
             android:layout_width="28dp"
@@ -283,7 +277,6 @@
             android:visibility="gone"
             android:contentDescription="Now Playing" />
 
-        <!-- Now Playing Details Header for Lyrics View -->
         <LinearLayout
             android:id="@+id/lyrics_header_info"
             android:layout_width="0dp"
@@ -319,7 +312,6 @@
                 tools:text="Artist Name"/>
         </LinearLayout>
 
-        <!-- Spacer to push favorite to right when lyrics header is hidden -->
         <View
             android:id="@+id/middle_controls_spacer"
             android:layout_width="0dp"

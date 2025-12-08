@@ -5,9 +5,12 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.res.ColorStateList
 import android.graphics.Color
+import android.graphics.PorterDuff
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.GradientDrawable
+import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.media.MediaMetadataRetriever
@@ -21,13 +24,11 @@ import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.view.animation.LinearInterpolator
 import android.widget.HorizontalScrollView
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
-import android.widget.RadioButton
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
@@ -80,6 +81,7 @@ class NowPlayingFragment : Fragment() {
     private var isFragmentVisible = false
 
     private var isSharing = false
+    private lateinit var audioManager: AudioManager
 
     // Views
     private lateinit var seekBar: SeekBar
@@ -167,6 +169,19 @@ class NowPlayingFragment : Fragment() {
         }
     }
 
+    // Audio Device Callback to detect plug/unplug events
+    private val audioDeviceCallback = object : AudioDeviceCallback() {
+        override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) {
+            super.onAudioDevicesAdded(addedDevices)
+            updateAudioOutputUI()
+        }
+
+        override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>?) {
+            super.onAudioDevicesRemoved(removedDevices)
+            updateAudioOutputUI()
+        }
+    }
+
     private fun syncLyrics(currentPosition: Long) {
         if (!isLyricsVisible || currentLyricsList.isEmpty()) return
 
@@ -191,9 +206,6 @@ class NowPlayingFragment : Fragment() {
                 "SONG_CHANGED" -> {
                     musicService?.getCurrentSong()?.let { song ->
                         song.isFavorite = PreferenceManager.isFavorite(requireContext(), song.id)
-
-                        // OPTIMIZATION: Always prefetch lyrics on song change
-                        // regardless of whether lyrics are currently visible
                         fetchLyrics(song)
                     }
                     updateSongInfo()
@@ -229,6 +241,7 @@ class NowPlayingFragment : Fragment() {
         super.onCreate(savedInstanceState)
         musicService = (requireActivity() as MainActivity).getMusicService()
         queueManager = NowPlayingQueueManager(this)
+        audioManager = requireContext().getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
         val filter = IntentFilter().apply {
             addAction("SONG_CHANGED")
@@ -273,16 +286,14 @@ class NowPlayingFragment : Fragment() {
         btnShare = view.findViewById(R.id.btn_share)
         btnDetails = view.findViewById(R.id.btn_details)
         btnQueue = view.findViewById(R.id.btn_queue)
-        btnAudioOutput = view.findViewById(R.id.btn_audio_output) // NEW
+        btnAudioOutput = view.findViewById(R.id.btn_audio_output)
         ivFavorite = view.findViewById(R.id.iv_fav)
         ivAlbumArt = view.findViewById(R.id.album_art)
 
-        // Main Info
         tvSongTitle = view.findViewById(R.id.song_title)
         tvSongArtist = view.findViewById(R.id.song_artist)
         tvSongDetails = view.findViewById(R.id.song_details)
 
-        // Lyrics Header Info
         lyricsHeaderInfo = view.findViewById(R.id.lyrics_header_info)
         middleControlsSpacer = view.findViewById(R.id.middle_controls_spacer)
         ivNowPlayingIcon = view.findViewById(R.id.iv_now_playing_icon)
@@ -292,11 +303,9 @@ class NowPlayingFragment : Fragment() {
         backgroundGradient = view.findViewById(R.id.background_gradient)
         backgroundOverlay = view.findViewById(R.id.background_overlay)
 
-        // Swappable Containers
         artInfoContainer = view.findViewById(R.id.art_info_container)
         lyricsContainer = view.findViewById(R.id.lyrics_container)
 
-        // Initialize Lyrics Views
         lyricsLoadingProgress = view.findViewById(R.id.lyrics_loading_progress)
         lyricsRecyclerView = view.findViewById(R.id.lyrics_recycler_view)
         lyricsPlainScrollView = view.findViewById(R.id.lyrics_plain_scroll_view)
@@ -404,7 +413,6 @@ class NowPlayingFragment : Fragment() {
         btnQueue.setOnClickListener { queueManager.showQueueDialog() }
         ivFavorite.setOnClickListener { toggleFavorite() }
 
-        // Audio Output Click
         btnAudioOutput.setOnClickListener { showAudioOutputDialog() }
 
         ivAlbumArt.setOnClickListener { toggleLyricsVisibility() }
@@ -415,23 +423,26 @@ class NowPlayingFragment : Fragment() {
         tvLyricsPlain.setOnClickListener { toggleLyricsVisibility() }
     }
 
-    // Helper to intelligently guess active device ID if preference is missing (-1 or 0)
+    // Heuristics to determine the likely active device
     private fun getActiveDeviceId(devices: List<AudioDeviceInfo>): Int {
         val preferredId = musicService?.getPreferredAudioDevice() ?: -1
-        if (preferredId > 0) return preferredId
+        if (preferredId > 0) {
+            // Check if preferred device is still connected
+            if (devices.any { it.id == preferredId }) return preferredId
+        }
 
-        // Heuristics:
-        // 1. Bluetooth
-        devices.find {
-            it.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ||
-                    it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO
-        }?.let { return it.id }
-
-        // 2. Wired
+        // 1. Wired (Highest Priority for plug event detection)
         devices.find {
             it.type == AudioDeviceInfo.TYPE_WIRED_HEADSET ||
                     it.type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES ||
-                    it.type == AudioDeviceInfo.TYPE_USB_HEADSET
+                    it.type == AudioDeviceInfo.TYPE_USB_HEADSET ||
+                    it.type == AudioDeviceInfo.TYPE_USB_DEVICE
+        }?.let { return it.id }
+
+        // 2. Bluetooth
+        devices.find {
+            it.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ||
+                    it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO
         }?.let { return it.id }
 
         // 3. Built-in Speaker (Fallback)
@@ -439,41 +450,19 @@ class NowPlayingFragment : Fragment() {
     }
 
     private fun updateAudioOutputUI() {
+        // FIXED: Do NOT change the icon or color programmatically.
+        // This prevents the "white box" issue and keeps the appearance stable as requested.
+        // We only control visibility based on OS support.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val audioManager = requireContext().getSystemService(Context.AUDIO_SERVICE) as AudioManager
-            val devices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
-
-            val activeDeviceId = getActiveDeviceId(devices.toList())
-            val activeDevice = devices.find { it.id == activeDeviceId }
-
-            if (activeDevice != null) {
-                // Update Icon
-                val iconRes = when(activeDevice.type) {
-                    AudioDeviceInfo.TYPE_BLUETOOTH_A2DP, AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> R.drawable.ic_bluetooth
-                    AudioDeviceInfo.TYPE_WIRED_HEADSET, AudioDeviceInfo.TYPE_WIRED_HEADPHONES -> R.drawable.ic_headset
-                    else -> R.drawable.ic_speaker
-                }
-                btnAudioOutput.setImageResource(iconRes)
-
-                val spotifyGreen = Color.parseColor("#1DB954")
-                val white = Color.WHITE
-
-                // Update Color: Green if NOT internal speaker, White otherwise
-                if (activeDevice.type != AudioDeviceInfo.TYPE_BUILTIN_SPEAKER) {
-                    btnAudioOutput.setColorFilter(spotifyGreen)
-                } else {
-                    btnAudioOutput.setColorFilter(white)
-                }
-            }
+            btnAudioOutput.visibility = View.VISIBLE
+        } else {
+            btnAudioOutput.visibility = View.GONE
         }
     }
 
     private fun showAudioOutputDialog() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val audioManager = requireContext().getSystemService(Context.AUDIO_SERVICE) as AudioManager
             val devices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
-
-            // Filter devices to show relevant ones (avoid duplicate internals sometimes)
             val filteredDevices = devices.distinctBy { it.id }
 
             if (filteredDevices.isEmpty()) {
@@ -481,22 +470,19 @@ class NowPlayingFragment : Fragment() {
                 return
             }
 
-            // Inflate Custom Layout
             val dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_audio_output, null)
             val recyclerView = dialogView.findViewById<RecyclerView>(R.id.recycler_audio_devices)
             val btnClose = dialogView.findViewById<MaterialButton>(R.id.btn_close_audio_output)
 
-            // Setup RecyclerView
             recyclerView.layoutManager = LinearLayoutManager(requireContext())
 
-            // Get active device ID using the smart helper
             val currentDeviceId = getActiveDeviceId(devices.toList())
 
             val adapter = AudioDeviceAdapter(filteredDevices, currentDeviceId) { selectedDevice ->
                 val success = musicService?.setPreferredAudioDevice(selectedDevice.id) == true
                 if (success) {
-                    Toast.makeText(requireContext(), "Switched to ${selectedDevice.productName}", Toast.LENGTH_SHORT).show()
-                    updateAudioOutputUI() // Refresh the main button immediately
+                    Toast.makeText(requireContext(), "Switched to ${getDeviceName(selectedDevice)}", Toast.LENGTH_SHORT).show()
+                    updateAudioOutputUI()
                     audioOutputDialog?.dismiss()
                 } else {
                     Toast.makeText(requireContext(), "Could not switch device", Toast.LENGTH_SHORT).show()
@@ -518,7 +504,15 @@ class NowPlayingFragment : Fragment() {
         }
     }
 
-    // Place this INSIDE NowPlayingFragment, replacing the old AudioDeviceAdapter class
+    private fun getDeviceName(device: AudioDeviceInfo): String {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            device.productName.toString()
+        } else {
+            getDeviceTypeName(device.type)
+        }
+    }
+
+    // Dialog Adapter: Kept the Green color logic for the list items as requested
     inner class AudioDeviceAdapter(
         private val devices: List<AudioDeviceInfo>,
         private val currentDeviceId: Int,
@@ -544,45 +538,41 @@ class NowPlayingFragment : Fragment() {
             private val ivIndicator: ImageView = itemView.findViewById(R.id.iv_active_indicator)
 
             fun bind(device: AudioDeviceInfo, isSelected: Boolean) {
-                // 1. Set Text Info
-                val name = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    device.productName.toString()
-                } else {
-                    getDeviceTypeName(device.type)
-                }
+                val name = getDeviceName(device)
                 tvName.text = name
-                tvStatus.text = getDeviceTypeName(device.type)
 
-                // 2. Set Icon based on type
-                val iconRes = when(device.type) {
+                // Show Type only if not listening (Listening text handled below)
+                if (!isSelected) {
+                    tvStatus.text = getDeviceTypeName(device.type)
+                }
+
+                val iconRes = when (device.type) {
                     AudioDeviceInfo.TYPE_BLUETOOTH_A2DP, AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> R.drawable.ic_bluetooth
                     AudioDeviceInfo.TYPE_WIRED_HEADSET, AudioDeviceInfo.TYPE_WIRED_HEADPHONES -> R.drawable.ic_headset
                     else -> R.drawable.ic_speaker
                 }
                 ivIcon.setImageResource(iconRes)
 
-                // 3. Spotify-style Active State Logic
                 val spotifyGreen = Color.parseColor("#1DB954")
-                val defaultColor = ContextCompat.getColor(itemView.context, R.color.white) // Or your default text color
+                val defaultColor = ContextCompat.getColor(itemView.context, R.color.white)
 
                 if (isSelected) {
-                    // ACTIVE: Green Text, Green Icon, Indicator Visible
                     tvName.setTextColor(spotifyGreen)
-                    ivIcon.setColorFilter(spotifyGreen)
-                    ivIndicator.setColorFilter(spotifyGreen)
+                    // SRC_IN fixes icon tinting issues
+                    ivIcon.setColorFilter(spotifyGreen, PorterDuff.Mode.SRC_IN)
+                    ivIndicator.setColorFilter(spotifyGreen, PorterDuff.Mode.SRC_IN)
                     ivIndicator.visibility = View.VISIBLE
 
                     tvStatus.text = "Listening on"
                     tvStatus.setTextColor(spotifyGreen)
                 } else {
-                    // INACTIVE: White Text, White Icon, Indicator Gone
                     tvName.setTextColor(defaultColor)
-                    ivIcon.clearColorFilter() // Or setColorFilter(defaultColor)
+                    ivIcon.clearColorFilter()
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                        ivIcon.imageTintList = android.content.res.ColorStateList.valueOf(defaultColor)
+                        ivIcon.imageTintList = ColorStateList.valueOf(defaultColor)
                     }
                     ivIndicator.visibility = View.GONE
-                    tvStatus.setTextColor(Color.parseColor("#B3FFFFFF")) // Dimmed white
+                    tvStatus.setTextColor(Color.parseColor("#B3FFFFFF"))
                 }
 
                 itemView.setOnClickListener {
@@ -609,33 +599,27 @@ class NowPlayingFragment : Fragment() {
     private fun toggleLyricsVisibility() {
         isLyricsVisible = !isLyricsVisible
 
-        // Use TransitionManager ONLY on the containers changing to avoid affecting Seekbar
         TransitionManager.beginDelayedTransition(mainContentContainer)
 
         if (isLyricsVisible) {
             lyricsContainer.visibility = View.VISIBLE
             artInfoContainer.visibility = View.INVISIBLE
 
-            // Show new Details Header & Icon, hide Spacer
             lyricsHeaderInfo.visibility = View.VISIBLE
             ivNowPlayingIcon.visibility = View.VISIBLE
             middleControlsSpacer.visibility = View.GONE
 
-            // Re-trigger marquee for the header
             tvLyricsSongTitle.isSelected = true
             tvLyricsSongArtist.isSelected = true
 
             val song = musicService?.getCurrentSong()
             if (song != null) {
-                // If lyrics were partially loaded or in cache, this will show them instantly
-                // If network is still running, UI remains in "loading" state until job finishes
                 checkAndDisplayLyrics(song)
             }
         } else {
             lyricsContainer.visibility = View.GONE
             artInfoContainer.visibility = View.VISIBLE
 
-            // Hide Details Header & Icon, show Spacer
             lyricsHeaderInfo.visibility = View.GONE
             ivNowPlayingIcon.visibility = View.GONE
             middleControlsSpacer.visibility = View.VISIBLE
@@ -653,44 +637,28 @@ class NowPlayingFragment : Fragment() {
         return cleaned.trim()
     }
 
-    // New helper to handle UI state based on Cache/Network status
     private fun checkAndDisplayLyrics(song: Song) {
         if (lyricsCache.containsKey(song.id)) {
-            // HIT: Load immediately from RAM
             updateLyricsUI(song.id, lyricsCache[song.id])
         } else {
-            // MISS: Ensure job is running (it should have started in onReceive), show loading
             if (fetchLyricsJob?.isActive != true) {
-                // Rare edge case: Song changed but job died/didn't start
                 fetchLyrics(song)
             }
             showLyricsLoadingState()
         }
     }
 
-    // Refactored to separate Network Logic from UI Logic
     private fun fetchLyrics(song: Song) {
-        // Cancel any pending request for previous songs to save bandwidth
         fetchLyricsJob?.cancel()
-
-        // Reset local ID tracker
         currentLyricsSongId = song.id
 
-        // If in cache, don't fetch again
         if (lyricsCache.containsKey(song.id)) {
             if (isLyricsVisible) updateLyricsUI(song.id, lyricsCache[song.id])
             return
         }
 
-        // Start Background Fetch
         fetchLyricsJob = lifecycleScope.launch {
             try {
-                // Small delay to allow UI to settle if user is spamming "Next"
-                // This prevents making 10 requests if user skips 10 songs in 1 second
-                // but keeps it fast enough (300ms) to feel instant
-                // Remove this delay if you want ABSOLUTE raw speed at cost of data
-                // kotlinx.coroutines.delay(300)
-
                 val cleanTitle = cleanMetaData(song.title)
                 val cleanArtist = cleanMetaData(song.artist ?: "")
                 val cleanAlbum = cleanMetaData(song.album ?: "")
@@ -712,10 +680,8 @@ class NowPlayingFragment : Fragment() {
                     result
                 }
 
-                // Cache the result (even if null, so we don't retry failed songs repeatedly)
                 lyricsCache[song.id] = lyricResult
 
-                // If the user is looking at the lyrics screen for THIS song, update UI
                 if (isLyricsVisible && currentLyricsSongId == song.id) {
                     updateLyricsUI(song.id, lyricResult)
                 }
@@ -737,7 +703,6 @@ class NowPlayingFragment : Fragment() {
     }
 
     private fun updateLyricsUI(songId: Long, lyricResult: LrcLibLyrics?) {
-        // Double check we are updating the right song
         if (currentLyricsSongId != songId) return
 
         lyricsLoadingProgress.visibility = View.GONE
@@ -829,18 +794,16 @@ class NowPlayingFragment : Fragment() {
             }
         }
 
-        // Label: Fixed width (e.g., 100dp) so values align perfectly vertically
         val labelView = TextView(requireContext()).apply {
             text = label
             setTextAppearance(android.R.style.TextAppearance_Small)
             setTextColor(ContextCompat.getColor(context, android.R.color.darker_gray))
             layoutParams = LinearLayout.LayoutParams(
-                dpToPx(100), // FIXED WIDTH prevents the huge gap
+                dpToPx(100),
                 LinearLayout.LayoutParams.WRAP_CONTENT
             )
         }
 
-        // Value: Fills the remaining space
         val valueView = TextView(requireContext()).apply {
             text = value
             setTextAppearance(android.R.style.TextAppearance_Small)
@@ -848,7 +811,7 @@ class NowPlayingFragment : Fragment() {
             layoutParams = LinearLayout.LayoutParams(
                 0,
                 LinearLayout.LayoutParams.WRAP_CONTENT,
-                1f // Takes up all remaining space
+                1f
             )
         }
 
@@ -935,19 +898,15 @@ class NowPlayingFragment : Fragment() {
         val currentSong = musicService?.getCurrentSong() ?: return
         currentSong.isFavorite = PreferenceManager.isFavorite(requireContext(), currentSong.id)
 
-        // Update Main Info
         tvSongTitle.text = currentSong.title
         tvSongArtist.text = currentSong.artist ?: "Unknown Artist"
 
-        // IMPORTANT: Trigger marquee for main info
         tvSongTitle.isSelected = true
         tvSongArtist.isSelected = true
         tvSongDetails.isSelected = true
 
-        // Update Lyrics Header Info
         tvLyricsSongTitle.text = currentSong.title
         tvLyricsSongArtist.text = currentSong.artist ?: "Unknown Artist"
-        // IMPORTANT: Trigger marquee for lyrics header
         tvLyricsSongTitle.isSelected = true
         tvLyricsSongArtist.isSelected = true
 
@@ -1054,6 +1013,22 @@ class NowPlayingFragment : Fragment() {
         handler.removeCallbacks(updateSeekBar)
     }
 
+    override fun onStart() {
+        super.onStart()
+        // Register Audio Device Callback (API 23+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            audioManager.registerAudioDeviceCallback(audioDeviceCallback, handler)
+        }
+        updateAudioOutputUI()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            audioManager.unregisterAudioDeviceCallback(audioDeviceCallback)
+        }
+    }
+
     override fun onResume() {
         super.onResume()
         isFragmentVisible = true
@@ -1062,7 +1037,6 @@ class NowPlayingFragment : Fragment() {
 
         musicService?.getCurrentSong()?.let { song ->
             song.isFavorite = PreferenceManager.isFavorite(requireContext(), song.id)
-            // Ensure lyrics are being fetched or shown if we resume
             if(isLyricsVisible) {
                 checkAndDisplayLyrics(song)
             }
@@ -1070,9 +1044,8 @@ class NowPlayingFragment : Fragment() {
 
         startSeekBarUpdates()
         updatePlaybackControls()
-        updateAudioOutputUI() // CHECK AUDIO OUTPUT ON RESUME
+        updateAudioOutputUI()
 
-        // Re-enable marquee when fragment resumes
         tvSongTitle.isSelected = true
         tvSongArtist.isSelected = true
         tvSongDetails.isSelected = true
@@ -1112,7 +1085,7 @@ class NowPlayingFragment : Fragment() {
             // Ignore if receiver was not registered
         }
         queueManager.clearCache()
-        fetchLyricsJob?.cancel() // Cancel network job
+        fetchLyricsJob?.cancel()
     }
 
     private fun dpToPx(dp: Int): Int {
