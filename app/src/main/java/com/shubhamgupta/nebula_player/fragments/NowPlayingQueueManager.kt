@@ -1,12 +1,14 @@
 package com.shubhamgupta.nebula_player.fragments
 
+import android.app.Dialog
 import android.content.Intent
 import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.Window
 import android.widget.ImageView
-import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
@@ -14,8 +16,6 @@ import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
-import com.google.android.material.bottomsheet.BottomSheetBehavior
-import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.button.MaterialButton
 import com.shubhamgupta.nebula_player.R
 import com.shubhamgupta.nebula_player.models.Song
@@ -23,7 +23,8 @@ import com.shubhamgupta.nebula_player.utils.SongUtils
 
 class NowPlayingQueueManager(private val fragment: NowPlayingFragment) {
 
-    private var queueDialog: BottomSheetDialog? = null
+    // CHANGED: Use standard Dialog instead of BottomSheetDialog to support floating layout
+    private var queueDialog: Dialog? = null
     private var queueAdapter: QueueAdapter? = null
     private var currentQueuePosition = 0
 
@@ -36,12 +37,15 @@ class NowPlayingQueueManager(private val fragment: NowPlayingFragment) {
             return
         }
 
-        // Inflate the existing layout
+        // Inflate the layout
         val dialogView = LayoutInflater.from(fragment.requireContext()).inflate(R.layout.dialog_queue, null)
         val btnCloseBottom = dialogView.findViewById<MaterialButton>(R.id.btn_close_queue_bottom)
 
-        // Find and replace the scrollview container with a RecyclerView for professional performance
-        // We look for the ScrollView by ID used in original file
+        // Setup RecyclerView (replacing ScrollView logic if necessary, though XML now uses ScrollView with internal LinearLayout)
+        // Note: The new XML uses a ScrollView containing a LinearLayout (id: queue_list).
+        // For better performance with large queues, we should programmatically inject a RecyclerView or use the existing structure.
+        // To match your previous logic ensuring professional performance, we will swap the ScrollView for a RecyclerView.
+
         val scrollView = dialogView.findViewById<View>(R.id.queue_scroll_view)
 
         // Setup RecyclerView
@@ -52,7 +56,7 @@ class NowPlayingQueueManager(private val fragment: NowPlayingFragment) {
         )
         recyclerView.layoutManager = LinearLayoutManager(fragment.requireContext())
 
-        // Replace logic: Remove ScrollView, Add RecyclerView
+        // Logic: Remove ScrollView, Add RecyclerView at the same index
         if (scrollView != null && scrollView.parent is ViewGroup) {
             val parent = scrollView.parent as ViewGroup
             val index = parent.indexOfChild(scrollView)
@@ -71,29 +75,20 @@ class NowPlayingQueueManager(private val fragment: NowPlayingFragment) {
             }
         }
         recyclerView.adapter = queueAdapter
-
-        // Scroll to current song
         recyclerView.scrollToPosition(currentQueuePosition)
 
-        queueDialog = BottomSheetDialog(fragment.requireContext())
+        // CHANGED: Initialize standard Dialog with transparent window
+        queueDialog = Dialog(fragment.requireContext())
+        queueDialog?.requestWindowFeature(Window.FEATURE_NO_TITLE)
         queueDialog?.setContentView(dialogView)
 
-        queueDialog?.setOnShowListener { dialogInterface ->
-            val bottomSheet = (dialogInterface as BottomSheetDialog).findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
-            bottomSheet?.let {
-                val behavior = BottomSheetBehavior.from(it)
-                val displayMetrics = fragment.requireContext().resources.displayMetrics
-                val screenHeight = displayMetrics.heightPixels
-                val targetHeight = (screenHeight * 0.65).toInt()
+        // Essential for the floating effect: Make window transparent and full screen
+        queueDialog?.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+        queueDialog?.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
 
-                val layoutParams = it.layoutParams
-                layoutParams?.height = targetHeight
-                it.layoutParams = layoutParams
-
-                behavior.isHideable = false
-                behavior.peekHeight = targetHeight
-                behavior.state = BottomSheetBehavior.STATE_EXPANDED
-            }
+        // Click outside to dismiss (using the ID from the XML provided earlier)
+        dialogView.findViewById<View>(R.id.queue_overlay)?.setOnClickListener {
+            queueDialog?.dismiss()
         }
 
         btnCloseBottom?.setOnClickListener {
@@ -120,14 +115,14 @@ class NowPlayingQueueManager(private val fragment: NowPlayingFragment) {
     }
 
     fun stopScrollMonitoring() {
-        // No longer needed with RecyclerView
+        // No longer needed
     }
 
     fun clearCache() {
-        // No longer needed with RecyclerView
+        // No longer needed
     }
 
-    // --- Inner RecyclerView Adapter for Professional Performance ---
+    // --- Inner RecyclerView Adapter ---
     private inner class QueueAdapter(
         private var songs: List<Song>,
         private var currentPos: Int,
@@ -165,10 +160,11 @@ class NowPlayingQueueManager(private val fragment: NowPlayingFragment) {
                 tvPosition.text = "${position + 1}"
 
                 if (isCurrent) {
-                    tvTitle.setTextColor(Color.parseColor("#FF018786")) // Teal/Accent
-                    tvArtist.setTextColor(Color.parseColor("#FF018786"))
-                    tvPosition.setTextColor(Color.parseColor("#FF018786"))
-                    itemView.setBackgroundColor(Color.parseColor("#1A018786"))
+                    tvTitle.setTextColor(Color.parseColor("#3EA6FF")) // Matching Accent
+                    tvArtist.setTextColor(Color.parseColor("#3EA6FF"))
+                    tvPosition.setTextColor(Color.parseColor("#3EA6FF"))
+                    // Use a subtle background tint for current track
+                    itemView.setBackgroundColor(Color.parseColor("#1A3EA6FF"))
                 } else {
                     tvTitle.setTextColor(Color.WHITE)
                     tvArtist.setTextColor(Color.parseColor("#B3FFFFFF"))

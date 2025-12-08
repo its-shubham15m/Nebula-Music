@@ -65,7 +65,7 @@
             android:layout_width="48dp"
             android:layout_height="48dp"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:src="@drawable/ic_speaker"
+            android:src="@drawable/ic_speaker_edit"
             android:padding="12dp"
             app:tint="@color/white"
             android:contentDescription="Audio Output" />

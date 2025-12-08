@@ -1,62 +1,98 @@
 <?xml version="1.0" encoding="utf-8"?>
-<com.google.android.material.card.MaterialCardView
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/queue_overlay"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:minHeight="200dp"
-    android:maxHeight="500dp"
-    app:cardElevation="8dp"
-    app:cardBackgroundColor="@android:color/black"
-    app:shapeAppearanceOverlay="@style/ShapeAppearance.App.RoundedTopCorners"
-    >
+    android:layout_height="match_parent"
+    android:background="@android:color/transparent">
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:orientation="vertical"
-        android:padding="16dp">
+    <com.google.android.material.card.MaterialCardView
+        android:layout_width="360dp"
+        android:layout_height="480dp"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="24dp"
+        app:cardBackgroundColor="#1F1F1F"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="12dp"
+        app:strokeColor="#33FFFFFF"
+        app:strokeWidth="1dp"
+        android:clickable="true"
+        android:focusable="true">
 
-        <TextView
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Up Next"
-            android:textSize="20sp"
-            android:textStyle="bold"
-            android:textColor="@android:color/white"
-            android:gravity="center"
-            android:layout_marginBottom="16dp" />
-
-        <ScrollView
-            android:id="@+id/queue_scroll_view"
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1"
-            android:fillViewport="true"
-            android:layout_marginBottom="16dp"
-            android:scrollbars="vertical">
+            android:orientation="vertical"
+            android:paddingTop="20dp"
+            android:paddingBottom="12dp"
+            android:paddingHorizontal="20dp">
 
             <LinearLayout
-                android:id="@+id/queue_list"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical" />
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="16dp">
 
-        </ScrollView>
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Up Next"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:textColor="#FFFFFF" />
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_close_queue_bottom"
-            android:layout_width="200dp"
-            android:layout_height="wrap_content"
-            android:text="CLOSE"
-            android:textColor="@android:color/white"
-            android:textStyle="bold"
-            app:cornerRadius="8dp"
-            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-            app:strokeColor="@android:color/white"
-            app:strokeWidth="2dp"
-            android:layout_gravity="center_horizontal" />
+                <TextView
+                    android:id="@+id/tv_queue_count"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Queue"
+                    android:textSize="12sp"
+                    android:textStyle="bold"
+                    android:textColor="#3EA6FF"
+                    android:background="#1A3EA6FF"
+                    android:paddingHorizontal="8dp"
+                    android:paddingVertical="4dp"
+                    android:layout_marginStart="8dp"/>
+            </LinearLayout>
 
-    </LinearLayout>
+            <ScrollView
+                android:id="@+id/queue_scroll_view"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:minHeight="150dp"
+                android:maxHeight="400dp"
+                android:scrollbars="vertical"
+                android:fadeScrollbars="false"
+                android:fillViewport="true"
+                android:layout_marginBottom="16dp">
 
-</com.google.android.material.card.MaterialCardView>
+                <LinearLayout
+                    android:id="@+id/queue_list"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+
+            </ScrollView>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#33FFFFFF"
+                android:layout_marginBottom="8dp"/>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_close_queue_bottom"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Close"
+                android:textColor="#DDDDDD"
+                android:textStyle="bold"
+                app:rippleColor="#33FFFFFF" />
+
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+</FrameLayout>

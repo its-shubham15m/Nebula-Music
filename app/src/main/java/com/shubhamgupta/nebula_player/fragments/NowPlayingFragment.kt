@@ -1,6 +1,7 @@
 package com.shubhamgupta.nebula_player.fragments
 
 import android.animation.ValueAnimator
+import android.app.Dialog
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -9,6 +10,7 @@ import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.PorterDuff
 import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
@@ -24,6 +26,7 @@ import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.Window
 import android.widget.HorizontalScrollView
 import android.widget.ImageButton
 import android.widget.ImageView
@@ -77,7 +80,10 @@ class NowPlayingFragment : Fragment() {
     private val handler = Handler(Looper.getMainLooper())
     private var isSeeking = false
     private lateinit var bottomSheetDialog: BottomSheetDialog
-    private var audioOutputDialog: BottomSheetDialog? = null
+
+    // CHANGED: Use Dialog instead of BottomSheetDialog for floating layout
+    private var audioOutputDialog: Dialog? = null
+
     private var isFragmentVisible = false
 
     private var isSharing = false
@@ -423,15 +429,12 @@ class NowPlayingFragment : Fragment() {
         tvLyricsPlain.setOnClickListener { toggleLyricsVisibility() }
     }
 
-    // Heuristics to determine the likely active device
     private fun getActiveDeviceId(devices: List<AudioDeviceInfo>): Int {
         val preferredId = musicService?.getPreferredAudioDevice() ?: -1
         if (preferredId > 0) {
-            // Check if preferred device is still connected
             if (devices.any { it.id == preferredId }) return preferredId
         }
 
-        // 1. Wired (Highest Priority for plug event detection)
         devices.find {
             it.type == AudioDeviceInfo.TYPE_WIRED_HEADSET ||
                     it.type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES ||
@@ -439,20 +442,15 @@ class NowPlayingFragment : Fragment() {
                     it.type == AudioDeviceInfo.TYPE_USB_DEVICE
         }?.let { return it.id }
 
-        // 2. Bluetooth
         devices.find {
             it.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ||
                     it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO
         }?.let { return it.id }
 
-        // 3. Built-in Speaker (Fallback)
         return devices.find { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }?.id ?: -1
     }
 
     private fun updateAudioOutputUI() {
-        // FIXED: Do NOT change the icon or color programmatically.
-        // This prevents the "white box" issue and keeps the appearance stable as requested.
-        // We only control visibility based on OS support.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             btnAudioOutput.visibility = View.VISIBLE
         } else {
@@ -460,10 +458,55 @@ class NowPlayingFragment : Fragment() {
         }
     }
 
+    private fun getFilteredAudioDevices(devices: Array<AudioDeviceInfo>): List<AudioDeviceInfo> {
+        val rawList = devices.toList()
+        val result = mutableListOf<AudioDeviceInfo>()
+
+        val internalSpeaker = rawList.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+
+        if (internalSpeaker != null) {
+            result.add(internalSpeaker)
+        } else {
+            val earpiece = rawList.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_EARPIECE }
+            if (earpiece != null) result.add(earpiece)
+        }
+
+        val externalDevices = rawList.filter {
+            it.type != AudioDeviceInfo.TYPE_BUILTIN_SPEAKER &&
+                    it.type != AudioDeviceInfo.TYPE_BUILTIN_EARPIECE &&
+                    it.type != AudioDeviceInfo.TYPE_TELEPHONY
+        }
+
+        val groupedByName = externalDevices.groupBy { it.productName.toString().trim() }
+
+        for ((_, duplicates) in groupedByName) {
+            if (duplicates.size == 1) {
+                result.add(duplicates[0])
+            } else {
+                val bestDevice = duplicates.maxByOrNull { device ->
+                    when (device.type) {
+                        AudioDeviceInfo.TYPE_WIRED_HEADSET,
+                        AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
+                        AudioDeviceInfo.TYPE_USB_HEADSET,
+                        AudioDeviceInfo.TYPE_USB_DEVICE -> 100
+                        AudioDeviceInfo.TYPE_BLUETOOTH_A2DP -> 90
+                        AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> 50
+                        else -> 0
+                    }
+                }
+                bestDevice?.let { result.add(it) }
+            }
+        }
+
+        return result.sortedBy {
+            if (it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER) 1 else 0
+        }
+    }
+
     private fun showAudioOutputDialog() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             val devices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
-            val filteredDevices = devices.distinctBy { it.id }
+            val filteredDevices = getFilteredAudioDevices(devices)
 
             if (filteredDevices.isEmpty()) {
                 Toast.makeText(requireContext(), "No output devices found", Toast.LENGTH_SHORT).show()
@@ -490,8 +533,19 @@ class NowPlayingFragment : Fragment() {
             }
             recyclerView.adapter = adapter
 
-            audioOutputDialog = BottomSheetDialog(requireContext())
+            // CHANGED: Use Standard Dialog instead of BottomSheetDialog
+            audioOutputDialog = Dialog(requireContext())
+            audioOutputDialog?.requestWindowFeature(Window.FEATURE_NO_TITLE)
             audioOutputDialog?.setContentView(dialogView)
+
+            // Make background transparent and full screen for floating effect
+            audioOutputDialog?.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+            audioOutputDialog?.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+
+            // Click outside to dismiss (using ID from dialog_audio_output.xml)
+            dialogView.findViewById<View>(R.id.background_overlay)?.setOnClickListener {
+                audioOutputDialog?.dismiss()
+            }
 
             btnClose.setOnClickListener {
                 audioOutputDialog?.dismiss()
@@ -512,7 +566,6 @@ class NowPlayingFragment : Fragment() {
         }
     }
 
-    // Dialog Adapter: Kept the Green color logic for the list items as requested
     inner class AudioDeviceAdapter(
         private val devices: List<AudioDeviceInfo>,
         private val currentDeviceId: Int,
@@ -526,7 +579,16 @@ class NowPlayingFragment : Fragment() {
 
         override fun onBindViewHolder(holder: DeviceViewHolder, position: Int) {
             val device = devices[position]
-            holder.bind(device, device.id == currentDeviceId)
+            val isSelected = device.id == currentDeviceId ||
+                    (device.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER && isInternalSpeakerActive(currentDeviceId))
+
+            holder.bind(device, isSelected)
+        }
+
+        private fun isInternalSpeakerActive(activeId: Int): Boolean {
+            val activeDevice = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS).find { it.id == activeId }
+            return activeDevice?.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER ||
+                    activeDevice?.type == AudioDeviceInfo.TYPE_BUILTIN_EARPIECE
         }
 
         override fun getItemCount(): Int = devices.size
@@ -541,7 +603,6 @@ class NowPlayingFragment : Fragment() {
                 val name = getDeviceName(device)
                 tvName.text = name
 
-                // Show Type only if not listening (Listening text handled below)
                 if (!isSelected) {
                     tvStatus.text = getDeviceTypeName(device.type)
                 }
@@ -553,17 +614,16 @@ class NowPlayingFragment : Fragment() {
                 }
                 ivIcon.setImageResource(iconRes)
 
-                val spotifyGreen = Color.parseColor("#1DB954")
+                val spotifyGreen = Color.parseColor("#3EA6FF") // Changed to App Accent
                 val defaultColor = ContextCompat.getColor(itemView.context, R.color.white)
 
                 if (isSelected) {
                     tvName.setTextColor(spotifyGreen)
-                    // SRC_IN fixes icon tinting issues
                     ivIcon.setColorFilter(spotifyGreen, PorterDuff.Mode.SRC_IN)
                     ivIndicator.setColorFilter(spotifyGreen, PorterDuff.Mode.SRC_IN)
                     ivIndicator.visibility = View.VISIBLE
 
-                    tvStatus.text = "Listening on"
+                    tvStatus.text = "Active"
                     tvStatus.setTextColor(spotifyGreen)
                 } else {
                     tvName.setTextColor(defaultColor)
@@ -1015,7 +1075,6 @@ class NowPlayingFragment : Fragment() {
 
     override fun onStart() {
         super.onStart()
-        // Register Audio Device Callback (API 23+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             audioManager.registerAudioDeviceCallback(audioDeviceCallback, handler)
         }
