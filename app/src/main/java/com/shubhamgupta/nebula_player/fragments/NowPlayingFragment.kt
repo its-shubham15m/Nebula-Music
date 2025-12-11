@@ -23,7 +23,6 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.telephony.TelephonyManager
-import android.transition.TransitionManager
 import android.util.Log
 import android.util.TypedValue
 import android.view.GestureDetector
@@ -409,8 +408,10 @@ class NowPlayingFragment : Fragment() {
         lyricsRecyclerView.adapter = lyricsAdapter
 
         lyricsRecyclerView.post {
+            // Adjust padding to allow the first/last items to be centered
             val padding = (lyricsRecyclerView.height * 0.40).toInt()
             lyricsRecyclerView.setPadding(0, padding, 0, padding)
+            // ClipToPadding must be false for the Fading Edge to work on the padding area
             lyricsRecyclerView.clipToPadding = false
         }
     }
@@ -885,30 +886,114 @@ class NowPlayingFragment : Fragment() {
     private fun toggleLyricsVisibility() {
         isLyricsVisible = !isLyricsVisible
 
-        TransitionManager.beginDelayedTransition(mainContentContainer)
+        // Constants for animation
+        val duration = 300L
+        val scaleSmall = 0.95f
+        val scaleNormal = 1f
+        val interpolator = AccelerateDecelerateInterpolator()
 
         if (isLyricsVisible) {
+            // --- SHOW LYRICS ---
+
+            // 1. Prepare Lyrics Container (Hidden state)
             lyricsContainer.visibility = View.VISIBLE
-            artInfoContainer.visibility = View.INVISIBLE
+            lyricsContainer.alpha = 0f
+            lyricsContainer.scaleX = scaleSmall
+            lyricsContainer.scaleY = scaleSmall
 
             lyricsHeaderInfo.visibility = View.VISIBLE
+            lyricsHeaderInfo.alpha = 0f
             ivNowPlayingIcon.visibility = View.VISIBLE
-            singleLineContainer.visibility = View.GONE
+            ivNowPlayingIcon.alpha = 0f
 
+            // 2. Animate Lyrics IN
+            lyricsContainer.animate()
+                .alpha(1f)
+                .scaleX(scaleNormal)
+                .scaleY(scaleNormal)
+                .setDuration(duration)
+                .setInterpolator(interpolator)
+                .withEndAction(null) // Clear any previous listeners
+                .start()
+
+            lyricsHeaderInfo.animate().alpha(1f).setDuration(duration).start()
+            ivNowPlayingIcon.animate().alpha(1f).setDuration(duration).start()
+
+            // 3. Animate Art Info OUT
+            artInfoContainer.animate()
+                .alpha(0f)
+                .scaleX(scaleSmall)
+                .scaleY(scaleSmall)
+                .setDuration(duration)
+                .setInterpolator(interpolator)
+                .withEndAction {
+                    artInfoContainer.visibility = View.INVISIBLE
+                }
+                .start()
+
+            singleLineContainer.animate()
+                .alpha(0f)
+                .setDuration(duration)
+                .withEndAction {
+                    singleLineContainer.visibility = View.GONE
+                }
+                .start()
+
+            // Logic to load data
             tvLyricsSongTitle.isSelected = true
             tvLyricsSongArtist.isSelected = true
-
             val song = musicService?.getCurrentSong()
             if (song != null) {
                 checkAndDisplayLyrics(song)
             }
-        } else {
-            lyricsContainer.visibility = View.GONE
-            artInfoContainer.visibility = View.VISIBLE
 
-            lyricsHeaderInfo.visibility = View.GONE
-            ivNowPlayingIcon.visibility = View.GONE
+        } else {
+            // --- HIDE LYRICS (SHOW ART) ---
+
+            // 1. Prepare Art Container
+            artInfoContainer.visibility = View.VISIBLE
+            artInfoContainer.alpha = 0f
+            artInfoContainer.scaleX = scaleSmall
+            artInfoContainer.scaleY = scaleSmall
+
             singleLineContainer.visibility = View.VISIBLE
+            singleLineContainer.alpha = 0f
+
+            // 2. Animate Art IN
+            artInfoContainer.animate()
+                .alpha(1f)
+                .scaleX(scaleNormal)
+                .scaleY(scaleNormal)
+                .setDuration(duration)
+                .setInterpolator(interpolator)
+                .withEndAction(null)
+                .start()
+
+            singleLineContainer.animate().alpha(1f).setDuration(duration).start()
+
+            // 3. Animate Lyrics OUT
+            lyricsContainer.animate()
+                .alpha(0f)
+                .scaleX(scaleSmall)
+                .scaleY(scaleSmall)
+                .setDuration(duration)
+                .setInterpolator(interpolator)
+                .withEndAction {
+                    lyricsContainer.visibility = View.GONE
+                }
+                .start()
+
+            lyricsHeaderInfo.animate()
+                .alpha(0f)
+                .setDuration(duration)
+                .withEndAction { lyricsHeaderInfo.visibility = View.GONE }
+                .start()
+
+            ivNowPlayingIcon.animate()
+                .alpha(0f)
+                .setDuration(duration)
+                .withEndAction { ivNowPlayingIcon.visibility = View.GONE }
+                .start()
         }
     }
 
