@@ -195,7 +195,6 @@
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
                 android:background="@android:color/transparent"
-                app:layout_constraintHeight_percent="0.9"
                 app:layout_constraintTop_toTopOf="parent"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
@@ -220,7 +219,6 @@
                 android:scrollbars="none"
                 android:fillViewport="true"
                 android:visibility="gone"
-                app:layout_constraintHeight_percent="0.9"
                 app:layout_constraintTop_toTopOf="parent"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
@@ -246,7 +244,6 @@
                 android:scrollbars="none"
                 android:visibility="gone"
                 tools:listitem="@layout/item_lyric"
-                app:layout_constraintHeight_percent="0.9"
                 app:layout_constraintTop_toTopOf="parent"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
@@ -259,7 +256,7 @@
     <LinearLayout
         android:id="@+id/middle_controls"
         android:layout_width="match_parent"
-        android:layout_height="38dp"
+        android:layout_height="32dp"
         android:orientation="horizontal"
         android:gravity="center_vertical"
         android:layout_marginTop="12dp"
@@ -333,6 +330,7 @@
                 android:src="@drawable/ic_lyrics"
                 android:layout_marginStart="16dp"
                 app:tint="@color/white"
+                android:alpha="0.8"
                 android:contentDescription="Lyrics" />
 
             <TextView
@@ -341,7 +339,8 @@
                 android:layout_height="wrap_content"
                 android:paddingStart="12dp"
                 android:paddingEnd="8dp"
-                android:textColor="#80FFFFFF"
+                android:textColor="@color/white"
+                android:alpha="0.8"
                 android:textSize="16sp"
                 android:textStyle="bold"
                 android:singleLine="true"
@@ -354,8 +353,8 @@
 
         <ImageView
             android:id="@+id/iv_fav"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
             android:src="@drawable/ic_favorite_outline"
             android:contentDescription="Favorite"
             android:layout_marginEnd="16dp"/>
