@@ -12,7 +12,7 @@
         android:layout_gravity="bottom|center_horizontal"
         android:layout_marginBottom="24dp"
         app:cardBackgroundColor="#1F1F1F"
-        app:cardCornerRadius="16dp"
+        app:cardCornerRadius="24dp"
         app:cardElevation="12dp"
         app:strokeColor="#33FFFFFF"
         app:strokeWidth="1dp"
@@ -23,20 +23,22 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="20dp">
+            android:paddingHorizontal="20dp"
+            android:paddingTop="20dp"
+            android:paddingBottom="16dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
-                android:layout_marginBottom="20dp">
+                android:layout_marginBottom="12dp">
 
                 <ImageView
                     android:layout_width="24dp"
                     android:layout_height="24dp"
                     android:src="@drawable/ic_speaker_edit"
-                    app:tint="#3EA6FF"
+                    app:tint="@color/white"
                     android:contentDescription="Speaker Icon" />
 
                 <TextView
@@ -44,11 +46,17 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:text="Audio Output"
-                    android:textSize="18sp"
+                    android:textSize="20sp"
                     android:textStyle="bold"
                     android:textColor="#FFFFFF"
                     android:layout_marginStart="16dp" />
             </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#1AFFFFFF"
+                android:layout_marginBottom="12dp"/>
 
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/recycler_audio_devices"
@@ -57,18 +65,22 @@
                 android:clipToPadding="false"
                 android:overScrollMode="never"
                 android:nestedScrollingEnabled="false"
-                android:layout_marginBottom="24dp"/>
+                android:layout_marginBottom="16dp"/>
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_close_audio_output"
-                style="@style/Widget.MaterialComponents.Button.TextButton"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Done"
-                android:textColor="#3EA6FF"
+                android:layout_height="52dp"
+                android:text="CLOSE"
+                android:textColor="#FFFFFF"
                 android:textStyle="bold"
-                android:letterSpacing="0.05"
-                app:rippleColor="#333EA6FF" />
+                android:textAllCaps="true"
+                android:textSize="14sp"
+                app:strokeColor="#33FFFFFF"
+                app:strokeWidth="1dp"
+                app:cornerRadius="26dp"
+                app:rippleColor="#33FFFFFF" />
 
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>

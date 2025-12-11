@@ -1,6 +1,5 @@
 package com.shubhamgupta.nebula_player.fragments
 
-import android.animation.ValueAnimator
 import android.app.Dialog
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -27,7 +26,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.Window
-import android.widget.HorizontalScrollView
+import android.view.WindowManager
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -35,8 +34,6 @@ import android.widget.ProgressBar
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
-import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.ColorUtils
 import androidx.core.graphics.createBitmap
@@ -81,7 +78,6 @@ class NowPlayingFragment : Fragment() {
     private var isSeeking = false
     private lateinit var bottomSheetDialog: BottomSheetDialog
 
-    // CHANGED: Use Dialog instead of BottomSheetDialog for floating layout
     private var audioOutputDialog: Dialog? = null
 
     private var isFragmentVisible = false
@@ -110,7 +106,7 @@ class NowPlayingFragment : Fragment() {
     private lateinit var tvSongArtist: TextView
     private lateinit var tvSongDetails: TextView
 
-    // Lyrics Header Views (The one next to Favorite icon)
+    // Lyrics Header Views
     private lateinit var lyricsHeaderInfo: View
     private lateinit var middleControlsSpacer: View
     private lateinit var ivNowPlayingIcon: ImageView
@@ -136,13 +132,11 @@ class NowPlayingFragment : Fragment() {
     private var currentLyricsSongId: Long = -1
     private var isLyricsVisible = false
 
-    // OPTIMIZATION: Cache and Job management
     private val lyricsCache = mutableMapOf<Long, LrcLibLyrics?>()
     private var fetchLyricsJob: Job? = null
 
     private lateinit var queueManager: NowPlayingQueueManager
 
-    // Smooth scroller to center items
     private val smoothScroller by lazy {
         object : LinearSmoothScroller(context) {
             override fun getVerticalSnapPreference(): Int {
@@ -175,7 +169,6 @@ class NowPlayingFragment : Fragment() {
         }
     }
 
-    // Audio Device Callback to detect plug/unplug events
     private val audioDeviceCallback = object : AudioDeviceCallback() {
         override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) {
             super.onAudioDevicesAdded(addedDevices)
@@ -533,16 +526,29 @@ class NowPlayingFragment : Fragment() {
             }
             recyclerView.adapter = adapter
 
-            // CHANGED: Use Standard Dialog instead of BottomSheetDialog
             audioOutputDialog = Dialog(requireContext())
             audioOutputDialog?.requestWindowFeature(Window.FEATURE_NO_TITLE)
             audioOutputDialog?.setContentView(dialogView)
 
-            // Make background transparent and full screen for floating effect
-            audioOutputDialog?.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-            audioOutputDialog?.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+            // FIX: Make status bar transparent and enable edge-to-edge
+            audioOutputDialog?.window?.apply {
+                setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+                setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
 
-            // Click outside to dismiss (using ID from dialog_audio_output.xml)
+                // Set system UI flags to allow drawing behind status bar
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
+                    addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        setDecorFitsSystemWindows(false)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        decorView.systemUiVisibility = (View.SYSTEM_UI_FLAG_LAYOUT_STABLE or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN)
+                    }
+                    statusBarColor = Color.TRANSPARENT
+                }
+            }
+
             dialogView.findViewById<View>(R.id.background_overlay)?.setOnClickListener {
                 audioOutputDialog?.dismiss()
             }
@@ -614,7 +620,7 @@ class NowPlayingFragment : Fragment() {
                 }
                 ivIcon.setImageResource(iconRes)
 
-                val spotifyGreen = Color.parseColor("#3EA6FF") // Changed to App Accent
+                val spotifyGreen = Color.parseColor("#3EA6FF")
                 val defaultColor = ContextCompat.getColor(itemView.context, R.color.white)
 
                 if (isSelected) {

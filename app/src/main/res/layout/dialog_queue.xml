@@ -8,11 +8,11 @@
 
     <com.google.android.material.card.MaterialCardView
         android:layout_width="360dp"
-        android:layout_height="480dp"
+        android:layout_height="wrap_content"
         android:layout_gravity="bottom|center_horizontal"
         android:layout_marginBottom="24dp"
         app:cardBackgroundColor="#1F1F1F"
-        app:cardCornerRadius="16dp"
+        app:cardCornerRadius="24dp"
         app:cardElevation="12dp"
         app:strokeColor="#33FFFFFF"
         app:strokeWidth="1dp"
@@ -23,23 +23,23 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
+            android:paddingHorizontal="20dp"
             android:paddingTop="20dp"
-            android:paddingBottom="12dp"
-            android:paddingHorizontal="20dp">
+            android:paddingBottom="16dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
-                android:layout_marginBottom="16dp">
+                android:layout_marginBottom="12dp">
 
                 <TextView
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:text="Up Next"
-                    android:textSize="18sp"
+                    android:textSize="20sp"
                     android:textStyle="bold"
                     android:textColor="#FFFFFF" />
 
@@ -51,46 +51,40 @@
                     android:textSize="12sp"
                     android:textStyle="bold"
                     android:textColor="#3EA6FF"
-                    android:background="#1A3EA6FF"
-                    android:paddingHorizontal="8dp"
+                    android:background="@drawable/bg_queue_badge"
+                    android:paddingHorizontal="10dp"
                     android:paddingVertical="4dp"
                     android:layout_marginStart="8dp"/>
             </LinearLayout>
 
-            <ScrollView
-                android:id="@+id/queue_scroll_view"
-                android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_weight="1"
-                android:minHeight="150dp"
-                android:maxHeight="400dp"
-                android:scrollbars="vertical"
-                android:fadeScrollbars="false"
-                android:fillViewport="true"
-                android:layout_marginBottom="16dp">
-
-                <LinearLayout
-                    android:id="@+id/queue_list"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical" />
-
-            </ScrollView>
-
             <View
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
-                android:background="#33FFFFFF"
-                android:layout_marginBottom="8dp"/>
+                android:background="#1AFFFFFF"
+                android:layout_marginBottom="12dp"/>
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/recycler_queue_list"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:scrollbars="vertical"
+                android:clipToPadding="false"
+                android:overScrollMode="never"
+                android:layout_marginBottom="16dp" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_close_queue_bottom"
-                style="@style/Widget.MaterialComponents.Button.TextButton"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Close"
-                android:textColor="#DDDDDD"
+                android:layout_height="52dp"
+                android:text="CLOSE"
+                android:textColor="#FFFFFF"
                 android:textStyle="bold"
+                android:textAllCaps="true"
+                android:textSize="14sp"
+                app:strokeColor="#33FFFFFF"
+                app:strokeWidth="1dp"
+                app:cornerRadius="26dp"
                 app:rippleColor="#33FFFFFF" />
 
         </LinearLayout>
