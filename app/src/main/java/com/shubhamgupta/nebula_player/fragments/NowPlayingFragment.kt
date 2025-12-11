@@ -1,5 +1,6 @@
 package com.shubhamgupta.nebula_player.fragments
 
+import android.annotation.SuppressLint
 import android.app.Dialog
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -7,7 +8,9 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.res.ColorStateList
 import android.graphics.Color
+import android.graphics.LinearGradient
 import android.graphics.PorterDuff
+import android.graphics.Shader
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
@@ -19,14 +22,19 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.telephony.TelephonyManager
 import android.transition.TransitionManager
 import android.util.Log
 import android.util.TypedValue
+import android.view.GestureDetector
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.Window
 import android.view.WindowManager
+import android.view.animation.AccelerateDecelerateInterpolator
+import android.view.animation.OvershootInterpolator
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -108,7 +116,9 @@ class NowPlayingFragment : Fragment() {
 
     // Lyrics Header Views
     private lateinit var lyricsHeaderInfo: View
-    private lateinit var middleControlsSpacer: View
+    private lateinit var singleLineContainer: View // The container for icon + text
+    private lateinit var tvSingleLineLyric: TextView
+    private lateinit var ivSingleLineIcon: ImageView // New separate icon
     private lateinit var ivNowPlayingIcon: ImageView
     private lateinit var tvLyricsSongTitle: TextView
     private lateinit var tvLyricsSongArtist: TextView
@@ -136,6 +146,9 @@ class NowPlayingFragment : Fragment() {
     private var fetchLyricsJob: Job? = null
 
     private lateinit var queueManager: NowPlayingQueueManager
+
+    // For Swipe Animation
+    private var swipeDirection = 0 // 0: None, -1: Next (Swipe Left), 1: Prev (Swipe Right)
 
     private val smoothScroller by lazy {
         object : LinearSmoothScroller(context) {
@@ -181,20 +194,75 @@ class NowPlayingFragment : Fragment() {
         }
     }
 
+    // Call Receiver
+    private val callReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action == TelephonyManager.ACTION_PHONE_STATE_CHANGED) {
+                val state = intent.getStringExtra(TelephonyManager.EXTRA_STATE)
+                if (state == TelephonyManager.EXTRA_STATE_RINGING || state == TelephonyManager.EXTRA_STATE_OFFHOOK) {
+                    if (musicService?.isPlaying() == true) {
+                        musicService?.pause()
+                        updatePlayButton()
+                    }
+                }
+            }
+        }
+    }
+
     private fun syncLyrics(currentPosition: Long) {
-        if (!isLyricsVisible || currentLyricsList.isEmpty()) return
+        if (currentLyricsList.isNotEmpty()) {
+            val activeIndex = currentLyricsList.indexOfLast { it.startTime <= currentPosition }
 
-        lyricsAdapter.updateCurrentTime(currentPosition)
+            if (activeIndex != -1) {
+                val currentLine = currentLyricsList[activeIndex]
+                // Using .text as confirmed
+                val lineText = currentLine.text
+                if (tvSingleLineLyric.text.toString() != lineText) {
+                    tvSingleLineLyric.text = lineText
+                }
 
-        val activeIndex = currentLyricsList.indexOfLast { it.startTime <= currentPosition }
+                // --- KARAOKE EFFECT IMPLEMENTATION ---
+                val nextStartTime = if (activeIndex + 1 < currentLyricsList.size) {
+                    currentLyricsList[activeIndex + 1].startTime
+                } else {
+                    currentLine.startTime + 5000 // Default 5s for last line
+                }
 
-        if (activeIndex != -1 && activeIndex != lyricsAdapter.activeIndex) {
-            lyricsAdapter.updateActiveLine(activeIndex)
+                val lineDuration = nextStartTime - currentLine.startTime
+                val timePassed = currentPosition - currentLine.startTime
 
-            val layoutManager = lyricsRecyclerView.layoutManager as? LinearLayoutManager
-            if (layoutManager != null) {
-                smoothScroller.targetPosition = activeIndex
-                layoutManager.startSmoothScroll(smoothScroller)
+                // Calculate progress 0.0 to 1.0
+                val progress = (timePassed.toFloat() / lineDuration.toFloat()).coerceIn(0f, 1f)
+
+                if (tvSingleLineLyric.width > 0) {
+                    val activeColor = Color.WHITE
+                    val inactiveColor = Color.parseColor("#80FFFFFF") // Semi-transparent white
+
+                    // Create a gradient that is SOLID WHITE up to 'progress', then DIMS
+                    val gradient = LinearGradient(
+                        0f, 0f, tvSingleLineLyric.width.toFloat(), 0f,
+                        intArrayOf(activeColor, activeColor, inactiveColor, inactiveColor),
+                        floatArrayOf(0f, progress, progress + 0.01f, 1f),
+                        Shader.TileMode.CLAMP
+                    )
+                    tvSingleLineLyric.paint.shader = gradient
+                    tvSingleLineLyric.invalidate()
+                }
+                // -------------------------------------
+
+                // Update full recycler view only if visible
+                if (isLyricsVisible) {
+                    lyricsAdapter.updateCurrentTime(currentPosition)
+                    if (activeIndex != lyricsAdapter.activeIndex) {
+                        lyricsAdapter.updateActiveLine(activeIndex)
+
+                        val layoutManager = lyricsRecyclerView.layoutManager as? LinearLayoutManager
+                        if (layoutManager != null) {
+                            smoothScroller.targetPosition = activeIndex
+                            layoutManager.startSmoothScroll(smoothScroller)
+                        }
+                    }
+                }
             }
         }
     }
@@ -207,9 +275,20 @@ class NowPlayingFragment : Fragment() {
                         song.isFavorite = PreferenceManager.isFavorite(requireContext(), song.id)
                         fetchLyrics(song)
                     }
-                    updateSongInfo()
+
+                    // Handle swipe animation completion logic
+                    if (swipeDirection != 0) {
+                        completeSwipeAnimation()
+                    } else {
+                        // Regular button press or auto-play
+                        updateSongInfo()
+                    }
+
                     updatePlaybackControls()
                     queueManager.refreshQueueDialog()
+
+                    tvSingleLineLyric.text = "Loading lyrics..."
+                    tvSingleLineLyric.paint.shader = null // Reset shader
                 }
                 "PLAYBACK_STATE_CHANGED" -> {
                     updatePlayButton()
@@ -268,6 +347,7 @@ class NowPlayingFragment : Fragment() {
         setupBottomSheet()
         updatePlaybackControls()
         startSeekBarUpdates()
+        setupAlbumArtSwipe() // Setup swipe gestures
 
         return view
     }
@@ -294,7 +374,12 @@ class NowPlayingFragment : Fragment() {
         tvSongDetails = view.findViewById(R.id.song_details)
 
         lyricsHeaderInfo = view.findViewById(R.id.lyrics_header_info)
-        middleControlsSpacer = view.findViewById(R.id.middle_controls_spacer)
+
+        // Single Line Lyric views
+        singleLineContainer = view.findViewById(R.id.single_line_container)
+        tvSingleLineLyric = view.findViewById(R.id.tv_single_line_lyric)
+        ivSingleLineIcon = view.findViewById(R.id.iv_single_line_icon)
+
         ivNowPlayingIcon = view.findViewById(R.id.iv_now_playing_icon)
         tvLyricsSongTitle = view.findViewById(R.id.tv_lyrics_song_title)
         tvLyricsSongArtist = view.findViewById(R.id.tv_lyrics_song_artist)
@@ -313,6 +398,9 @@ class NowPlayingFragment : Fragment() {
         setupLyricsAdapter()
         setupSeekBar()
         applySystemWindowInsets(view)
+
+        // Initial state for lyrics views
+        tvSingleLineLyric.isSelected = true // For scrolling/marquee
     }
 
     private fun setupLyricsAdapter() {
@@ -328,6 +416,113 @@ class NowPlayingFragment : Fragment() {
             lyricsRecyclerView.clipToPadding = false
         }
     }
+
+    // --- SWIPE GESTURE IMPLEMENTATION (FIXED) ---
+    @SuppressLint("ClickableViewAccessibility")
+    private fun setupAlbumArtSwipe() {
+        // Use GestureDetector to distinguish clearly between TAP and SWIPE
+        val gestureDetector = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+                // Strictly handles the tap event
+                toggleLyricsVisibility()
+                return true
+            }
+
+            override fun onDown(e: MotionEvent): Boolean {
+                return true // Necessary to consume the event for drag tracking
+            }
+        })
+
+        ivAlbumArt.setOnTouchListener { v, event ->
+            // Pass event to detector first. If it handles a TAP, we stop.
+            if (gestureDetector.onTouchEvent(event)) {
+                return@setOnTouchListener true
+            }
+
+            // If not a tap, handle drag logic manually
+            handleDragTouch(v, event)
+            true
+        }
+    }
+
+    private var initialX = 0f
+    private var dX = 0f
+    private val SWIPE_THRESHOLD = 300f // Higher threshold to avoid accidental swipes
+
+    private fun handleDragTouch(view: View, event: MotionEvent) {
+        when (event.action) {
+            MotionEvent.ACTION_DOWN -> {
+                initialX = event.rawX
+                dX = 0f
+            }
+            MotionEvent.ACTION_MOVE -> {
+                dX = event.rawX - initialX
+                view.translationX = dX
+                // Fade out slightly as you drag further
+                view.alpha = 1f - (abs(dX) / (view.width * 1.5f))
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                // Check if drag was far enough to be a swipe
+                if (dX > SWIPE_THRESHOLD) {
+                    // Swipe Right -> Previous
+                    swipeDirection = 1
+                    // Animate exit to right
+                    view.animate()
+                        .translationX(view.width.toFloat())
+                        .alpha(0f)
+                        .setDuration(250)
+                        .withEndAction {
+                            musicService?.playPrevious()
+                        }
+                        .start()
+                } else if (dX < -SWIPE_THRESHOLD) {
+                    // Swipe Left -> Next
+                    swipeDirection = -1
+                    // Animate exit to left
+                    view.animate()
+                        .translationX(-view.width.toFloat())
+                        .alpha(0f)
+                        .setDuration(250)
+                        .withEndAction {
+                            musicService?.playNext()
+                        }
+                        .start()
+                } else {
+                    // Not far enough, Snap Back (Elastic effect)
+                    view.animate()
+                        .translationX(0f)
+                        .alpha(1f)
+                        .setInterpolator(OvershootInterpolator()) // Adds a little bounce
+                        .setDuration(300)
+                        .start()
+                }
+            }
+        }
+    }
+
+    private fun completeSwipeAnimation() {
+        // Called when song actually changes after a swipe
+        // Reset the view to the opposite side and animate in
+        updateSongInfo() // Load new image
+
+        // Determine where the new image should come FROM
+        // If we swiped LEFT (Next), new image comes from RIGHT
+        // If we swiped RIGHT (Prev), new image comes from LEFT
+        val startX = if (swipeDirection == -1) ivAlbumArt.width.toFloat() else -ivAlbumArt.width.toFloat()
+
+        ivAlbumArt.translationX = startX
+        ivAlbumArt.alpha = 0f
+
+        ivAlbumArt.animate()
+            .translationX(0f)
+            .alpha(1f)
+            .setInterpolator(AccelerateDecelerateInterpolator())
+            .setDuration(300)
+            .start()
+
+        swipeDirection = 0 // Reset
+    }
+    // ------------------------------------
 
     private fun applySystemWindowInsets(view: View) {
         val topControls = view.findViewById<LinearLayout>(R.id.top_controls)
@@ -414,8 +609,15 @@ class NowPlayingFragment : Fragment() {
 
         btnAudioOutput.setOnClickListener { showAudioOutputDialog() }
 
-        ivAlbumArt.setOnClickListener { toggleLyricsVisibility() }
+        // Note: ivAlbumArt click listener replaced by OnTouchListener in setupAlbumArtSwipe()
+
         lyricsContainer.setOnClickListener { toggleLyricsVisibility() }
+
+        lyricsHeaderInfo.setOnClickListener { toggleLyricsVisibility() }
+
+        // Single Line click listeners
+        singleLineContainer.setOnClickListener { toggleLyricsVisibility() }
+        tvSingleLineLyric.setOnClickListener { toggleLyricsVisibility() }
 
         lyricsRecyclerView.setOnClickListener { toggleLyricsVisibility() }
         lyricsPlainScrollView.setOnClickListener { toggleLyricsVisibility() }
@@ -530,12 +732,10 @@ class NowPlayingFragment : Fragment() {
             audioOutputDialog?.requestWindowFeature(Window.FEATURE_NO_TITLE)
             audioOutputDialog?.setContentView(dialogView)
 
-            // FIX: Make status bar transparent and enable edge-to-edge
             audioOutputDialog?.window?.apply {
                 setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
                 setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
 
-                // Set system UI flags to allow drawing behind status bar
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                     clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
                     addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
@@ -673,7 +873,7 @@ class NowPlayingFragment : Fragment() {
 
             lyricsHeaderInfo.visibility = View.VISIBLE
             ivNowPlayingIcon.visibility = View.VISIBLE
-            middleControlsSpacer.visibility = View.GONE
+            singleLineContainer.visibility = View.GONE
 
             tvLyricsSongTitle.isSelected = true
             tvLyricsSongArtist.isSelected = true
@@ -688,7 +888,7 @@ class NowPlayingFragment : Fragment() {
 
             lyricsHeaderInfo.visibility = View.GONE
             ivNowPlayingIcon.visibility = View.GONE
-            middleControlsSpacer.visibility = View.VISIBLE
+            singleLineContainer.visibility = View.VISIBLE
         }
     }
 
@@ -719,9 +919,12 @@ class NowPlayingFragment : Fragment() {
         currentLyricsSongId = song.id
 
         if (lyricsCache.containsKey(song.id)) {
-            if (isLyricsVisible) updateLyricsUI(song.id, lyricsCache[song.id])
+            updateLyricsUI(song.id, lyricsCache[song.id])
             return
         }
+
+        tvSingleLineLyric.text = "Loading lyrics..."
+        tvSingleLineLyric.paint.shader = null
 
         fetchLyricsJob = lifecycleScope.launch {
             try {
@@ -747,16 +950,11 @@ class NowPlayingFragment : Fragment() {
                 }
 
                 lyricsCache[song.id] = lyricResult
-
-                if (isLyricsVisible && currentLyricsSongId == song.id) {
-                    updateLyricsUI(song.id, lyricResult)
-                }
+                updateLyricsUI(song.id, lyricResult)
 
             } catch (e: Exception) {
                 Log.e("NowPlayingFragment", "Error fetching lyrics: ${e.message}")
-                if (isLyricsVisible && currentLyricsSongId == song.id) {
-                    showNoLyricsFound()
-                }
+                showNoLyricsFound()
             }
         }
     }
@@ -766,6 +964,8 @@ class NowPlayingFragment : Fragment() {
         lyricsRecyclerView.visibility = View.GONE
         lyricsPlainScrollView.visibility = View.GONE
         tvLyricsPlain.text = ""
+        tvSingleLineLyric.text = "Loading lyrics..."
+        tvSingleLineLyric.paint.shader = null
     }
 
     private fun updateLyricsUI(songId: Long, lyricResult: LrcLibLyrics?) {
@@ -784,6 +984,8 @@ class NowPlayingFragment : Fragment() {
                 tvLyricsPlain.text = lyricResult.plainLyrics
                 lyricsPlainScrollView.visibility = View.VISIBLE
                 lyricsRecyclerView.visibility = View.GONE
+                tvSingleLineLyric.text = "No synced lyrics"
+                tvSingleLineLyric.paint.shader = null
             } else {
                 showNoLyricsFound()
             }
@@ -797,6 +999,8 @@ class NowPlayingFragment : Fragment() {
         tvLyricsPlain.text = "No lyrics found"
         lyricsPlainScrollView.visibility = View.VISIBLE
         lyricsRecyclerView.visibility = View.GONE
+        tvSingleLineLyric.text = "No Lyrics"
+        tvSingleLineLyric.paint.shader = null
     }
 
     private fun toggleRepeat() {
@@ -1100,10 +1304,16 @@ class NowPlayingFragment : Fragment() {
         isSharing = false
         setSystemBarAppearance(true)
 
+        // Register Phone Call Receiver
+        val callFilter = IntentFilter(TelephonyManager.ACTION_PHONE_STATE_CHANGED)
+        requireActivity().registerReceiver(callReceiver, callFilter)
+
         musicService?.getCurrentSong()?.let { song ->
             song.isFavorite = PreferenceManager.isFavorite(requireContext(), song.id)
             if(isLyricsVisible) {
                 checkAndDisplayLyrics(song)
+            } else {
+                fetchLyrics(song)
             }
         }
 
@@ -1114,6 +1324,7 @@ class NowPlayingFragment : Fragment() {
         tvSongTitle.isSelected = true
         tvSongArtist.isSelected = true
         tvSongDetails.isSelected = true
+        tvSingleLineLyric.isSelected = true
         if (isLyricsVisible) {
             tvLyricsSongTitle.isSelected = true
             tvLyricsSongArtist.isSelected = true
@@ -1127,6 +1338,11 @@ class NowPlayingFragment : Fragment() {
             setSystemBarAppearance(false)
         }
         stopSeekBarUpdates()
+        try {
+            requireActivity().unregisterReceiver(callReceiver)
+        } catch (e: Exception) {
+            // Ignore
+        }
     }
 
     override fun onDestroyView() {

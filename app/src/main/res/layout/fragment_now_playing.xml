@@ -286,7 +286,10 @@
             android:gravity="center_vertical|start"
             android:paddingStart="12dp"
             android:paddingEnd="8dp"
-            android:visibility="gone">
+            android:visibility="gone"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?attr/selectableItemBackground">
 
             <TextView
                 android:id="@+id/tv_lyrics_song_title"
@@ -312,11 +315,42 @@
                 tools:text="Artist Name"/>
         </LinearLayout>
 
-        <View
-            android:id="@+id/middle_controls_spacer"
+        <LinearLayout
+            android:id="@+id/single_line_container"
             android:layout_width="0dp"
-            android:layout_height="0dp"
-            android:layout_weight="1" />
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?attr/selectableItemBackground">
+
+            <ImageView
+                android:id="@+id/iv_single_line_icon"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_lyrics"
+                android:layout_marginStart="16dp"
+                app:tint="@color/white"
+                android:contentDescription="Lyrics" />
+
+            <TextView
+                android:id="@+id/tv_single_line_lyric"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingStart="12dp"
+                android:paddingEnd="8dp"
+                android:textColor="#80FFFFFF"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:singleLine="true"
+                android:ellipsize="marquee"
+                android:marqueeRepeatLimit="marquee_forever"
+                android:scrollHorizontally="true"
+                tools:text="Singing lyrics line goes here..." />
+
+        </LinearLayout>
 
         <ImageView
             android:id="@+id/iv_fav"
