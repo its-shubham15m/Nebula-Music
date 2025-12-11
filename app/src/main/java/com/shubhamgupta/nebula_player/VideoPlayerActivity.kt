@@ -54,6 +54,7 @@ import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.VideoSize
 import androidx.media3.common.text.CueGroup
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
@@ -76,12 +77,8 @@ class VideoPlayerActivity : AppCompatActivity() {
 
     // ExoPlayer Components
     private lateinit var playerView: PlayerView
-    // CHANGED: Use Player interface to support ForwardingPlayer wrapper
     private var player: Player? = null
-    // Keep reference to ExoPlayer for specific builder needs if necessary, though mostly handled inside initialize
     private var trackSelector: DefaultTrackSelector? = null
-
-    // NEW: MediaSession to handle PiP controls and audio focus conflicts
     private var mediaSession: MediaSession? = null
 
     // Views
@@ -146,9 +143,11 @@ class VideoPlayerActivity : AppCompatActivity() {
     private val handler = Handler(Looper.getMainLooper())
     private val hideControlsRunnable = Runnable { hideSystemUI() }
     private val hideCenterInfoRunnable = Runnable {
-        centerInfoLayout.visibility = View.GONE
+        if(::centerInfoLayout.isInitialized) centerInfoLayout.visibility = View.GONE
     }
-    private val hideRatioChipRunnable = Runnable { ratioInfoChip.visibility = View.GONE }
+    private val hideRatioChipRunnable = Runnable {
+        if(::ratioInfoChip.isInitialized) ratioInfoChip.visibility = View.GONE
+    }
 
     // Gesture Accumulators
     private var scrollAccumulator = 0f
@@ -163,8 +162,8 @@ class VideoPlayerActivity : AppCompatActivity() {
                 val current = player!!.currentPosition
                 val target = current + (seekDirection * 2000)
                 player!!.seekTo(target.coerceIn(0, player!!.duration))
-                seekBar.progress = target.toInt()
-                currentTimeView.text = formatDuration(target)
+                if(::seekBar.isInitialized) seekBar.progress = target.toInt()
+                if(::currentTimeView.isInitialized) currentTimeView.text = formatDuration(target)
                 handler.postDelayed(this, 100)
             }
         }
@@ -175,7 +174,7 @@ class VideoPlayerActivity : AppCompatActivity() {
             if (player != null && player!!.isPlaying && !isSeeking) {
                 val current = player!!.currentPosition
                 val duration = player!!.duration
-                if (duration > 0) {
+                if (duration > 0 && ::seekBar.isInitialized) {
                     seekBar.max = duration.toInt()
                     seekBar.progress = current.toInt()
                     currentTimeView.text = formatDuration(current)
@@ -194,20 +193,15 @@ class VideoPlayerActivity : AppCompatActivity() {
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            window.attributes.layoutInDisplayCutoutMode =
-                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-        }
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-
+        setupWindowConfig()
         setContentView(R.layout.activity_video_player)
+
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
         initViews()
         applySavedPreferences()
 
-        playerView.subtitleView?.visibility = View.GONE
+        if(::playerView.isInitialized) playerView.subtitleView?.visibility = View.GONE
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -222,33 +216,70 @@ class VideoPlayerActivity : AppCompatActivity() {
             loadVideoList(initialVideoId)
         }
 
-        setupClickListeners()
-        setupHoldToSeek()
-        setupSeekBar()
-        setupGestures()
+        setupUiInteractions()
 
-        totalTimeView.setOnClickListener {
-            isShowRemainingTime = !isShowRemainingTime
-            handler.post(updateProgressAction)
-        }
+        // Defer UI hiding slightly to allow layout to settle
+        playerView.post { hideSystemUI() }
+    }
 
+    // --- CRITICAL FIX: Handle Orientation Change Seamlessly ---
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        // 1. Clear any pending UI runnables to prevent crashes during swap
+        handler.removeCallbacksAndMessages(null)
+
+        super.onConfigurationChanged(newConfig)
+
+        // 2. Detach Player safely
+        if(::playerView.isInitialized) playerView.player = null
+
+        // 3. Re-inflate the XML (Loads Portrait/Landscape layout)
+        setContentView(R.layout.activity_video_player)
+
+        // 4. Re-bind all Views IMMEDIATELY
+        initViews()
+
+        // 5. Re-attach interactions
+        setupUiInteractions()
+
+        // 6. Re-attach Player
+        playerView.player = player
+        playerView.subtitleView?.visibility = View.GONE
+
+        // 7. Restore UI State
+        updateUiAfterLayoutChange()
+
+        // 8. Apply visual settings
+        playerView.post { applyAspectRatio() }
+        setupWindowConfig()
         hideSystemUI()
+
+        // 9. Restart progress tracking
+        handler.post(updateProgressAction)
+    }
+
+    private fun setupWindowConfig() {
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        window.statusBarColor = Color.TRANSPARENT
+        window.navigationBarColor = Color.TRANSPARENT
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            window.attributes.layoutInDisplayCutoutMode =
+                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+        }
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 
     private fun initViews() {
         playerView = findViewById(R.id.player_view)
-
         titleView = findViewById(R.id.player_title)
         currentTimeView = findViewById(R.id.tv_current_time)
         totalTimeView = findViewById(R.id.tv_total_time)
         seekBar = findViewById(R.id.player_seekbar)
         subtitleView = findViewById(R.id.subtitle_view)
-
         backButton = findViewById(R.id.player_back_btn)
         playPauseButton = findViewById(R.id.player_play_pause_btn)
         prevButton = findViewById(R.id.player_prev_btn)
         nextButton = findViewById(R.id.player_next_btn)
-
         orientationButton = findViewById(R.id.player_orientation_btn)
         aspectRatioButton = findViewById(R.id.player_aspect_ratio_btn)
         tracksButton = findViewById(R.id.player_tracks_btn)
@@ -257,11 +288,9 @@ class VideoPlayerActivity : AppCompatActivity() {
         unlockButton = findViewById(R.id.unlock_btn)
         pipButton = findViewById(R.id.player_pip_btn)
         lockOverlay = findViewById(R.id.lock_overlay)
-
         topControls = findViewById(R.id.top_controls)
         bottomControls = findViewById(R.id.bottom_controls)
         centerControls = findViewById(R.id.center_controls)
-
         touchOverlay = findViewById(R.id.touch_overlay)
         rewindOverlay = findViewById(R.id.rewind_overlay)
         forwardOverlay = findViewById(R.id.forward_overlay)
@@ -269,9 +298,39 @@ class VideoPlayerActivity : AppCompatActivity() {
         centerInfoIcon = findViewById(R.id.center_info_icon)
         centerInfoText = findViewById(R.id.center_info_text)
         ratioInfoChip = findViewById(R.id.ratio_info_chip)
-
         seekPeekContainer = findViewById(R.id.seek_peek_container)
         seekPeekTime = findViewById(R.id.seek_peek_time)
+    }
+
+    private fun setupUiInteractions() {
+        setupClickListeners()
+        setupHoldToSeek()
+        setupSeekBar()
+        setupGestures()
+
+        if(::totalTimeView.isInitialized) {
+            totalTimeView.setOnClickListener {
+                isShowRemainingTime = !isShowRemainingTime
+                handler.post(updateProgressAction)
+            }
+        }
+    }
+
+    private fun updateUiAfterLayoutChange() {
+        if (currentVideoIndex != -1 && videoList.isNotEmpty()) {
+            titleView.text = cleanTitle(videoList[currentVideoIndex].title)
+        }
+
+        val isPlaying = player?.isPlaying == true
+        playPauseButton.setImageResource(if (isPlaying) R.drawable.ic_pausen else R.drawable.ic_playn)
+
+        if (isLocked) {
+            hideSystemUI()
+        } else {
+            showSystemUI()
+            resetAutoHideTimer()
+        }
+        applySubtitleSettings()
     }
 
     private fun applySavedPreferences() {
@@ -298,6 +357,8 @@ class VideoPlayerActivity : AppCompatActivity() {
     }
 
     private fun applySubtitleSettings() {
+        if (!::subtitleView.isInitialized) return
+
         val settings = PreferenceManager.getSubtitleSettings(this)
 
         subtitleView.textSize = settings.fontSize.toFloat()
@@ -321,25 +382,20 @@ class VideoPlayerActivity : AppCompatActivity() {
         if (player == null) {
             trackSelector = DefaultTrackSelector(this)
 
-            // Build the core ExoPlayer
             val exoPlayer = ExoPlayer.Builder(this)
                 .setTrackSelector(trackSelector!!)
                 .build()
 
-            // WRAP WITH FORWARDING PLAYER to intercept MediaSession commands (PiP/Headset)
             player = object : ForwardingPlayer(exoPlayer) {
                 override fun seekToNext() {
-                    // Trigger our custom navigation logic
                     playNextVideo()
                 }
 
                 override fun seekToPrevious() {
-                    // Trigger our custom previous logic
                     handlePrevious()
                 }
 
                 override fun getAvailableCommands(): Player.Commands {
-                    // Explicitly tell MediaSession that NEXT and PREVIOUS are available
                     return super.getAvailableCommands().buildUpon()
                         .add(Player.COMMAND_SEEK_TO_NEXT)
                         .add(Player.COMMAND_SEEK_TO_PREVIOUS)
@@ -355,25 +411,38 @@ class VideoPlayerActivity : AppCompatActivity() {
 
             playerView.player = player
             playerView.useController = false
+            playerView.keepScreenOn = true
 
             player?.addListener(object : Player.Listener {
                 override fun onPlaybackStateChanged(state: Int) {
                     if (state == Player.STATE_READY) {
                         val duration = player?.duration ?: 0
-                        if (duration > 0) {
+                        if (duration > 0 && ::seekBar.isInitialized) {
                             totalTimeView.text = formatDuration(duration)
                             seekBar.max = duration.toInt()
                         }
                         handler.post(updateProgressAction)
-                        applyAspectRatio()
+                        playerView.post { applyAspectRatio() }
                         checkResumeStatus()
                     } else if (state == Player.STATE_ENDED) {
                         playNextVideo()
                     }
                 }
 
+                override fun onVideoSizeChanged(videoSize: VideoSize) {
+                    super.onVideoSizeChanged(videoSize)
+                    playerView.post { applyAspectRatio() }
+                }
+
+                override fun onRenderedFirstFrame() {
+                    super.onRenderedFirstFrame()
+                    playerView.post { applyAspectRatio() }
+                }
+
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
-                    playPauseButton.setImageResource(if (isPlaying) R.drawable.ic_pausen else R.drawable.ic_playn)
+                    if(::playPauseButton.isInitialized) {
+                        playPauseButton.setImageResource(if (isPlaying) R.drawable.ic_pausen else R.drawable.ic_playn)
+                    }
                     if (isPlaying) resetAutoHideTimer()
                     else {
                         handler.removeCallbacks(hideControlsRunnable)
@@ -382,6 +451,7 @@ class VideoPlayerActivity : AppCompatActivity() {
                 }
 
                 override fun onCues(cueGroup: CueGroup) {
+                    if(!::subtitleView.isInitialized) return
                     if (cueGroup.cues.isNotEmpty()) {
                         subtitleView.text = cueGroup.cues.joinToString("\n") { it.text ?: "" }
                         subtitleView.visibility = View.VISIBLE
@@ -391,14 +461,10 @@ class VideoPlayerActivity : AppCompatActivity() {
                 }
             })
 
-            // CREATE MEDIA SESSION to steal focus and handle PiP controls
             mediaSession = MediaSession.Builder(this, player!!).build()
         }
     }
 
-    // ===============================================
-    // DIALOG HELPER (With Click Outside Fix)
-    // ===============================================
     private fun createPlayerDialog(layoutId: Int): Pair<Dialog, View> {
         val dialog = Dialog(this)
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
@@ -406,26 +472,29 @@ class VideoPlayerActivity : AppCompatActivity() {
         val view = LayoutInflater.from(this).inflate(layoutId, null)
         dialog.setContentView(view)
 
-        // Make window transparent
         dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-
-        // Ensure dialog fills screen so FrameLayout center/bottom gravity works
         dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
 
-        // CLICK OUTSIDE TO DISMISS LOGIC
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            dialog.window?.apply {
+                clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
+                addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    setDecorFitsSystemWindows(false)
+                } else {
+                    @Suppress("DEPRECATION")
+                    decorView.systemUiVisibility = (View.SYSTEM_UI_FLAG_LAYOUT_STABLE or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN)
+                }
+                statusBarColor = Color.TRANSPARENT
+                navigationBarColor = Color.TRANSPARENT
+            }
+        }
+
         view.findViewById<View>(R.id.background_overlay)?.setOnClickListener {
             dialog.dismiss()
         }
 
         return Pair(dialog, view)
-    }
-
-    // ===============================================
-    // FRAGMENT DISMISSAL HELPER
-    // ===============================================
-    fun dismissSubtitleFragment(view: View) {
-        val fragment = supportFragmentManager.findFragmentByTag("SubtitleSettings") as? androidx.fragment.app.DialogFragment
-        fragment?.dismiss()
     }
 
     private fun checkResumeStatus() {
@@ -503,7 +572,7 @@ class VideoPlayerActivity : AppCompatActivity() {
 
         hasResumeDialogShown = false
 
-        titleView.text = cleanTitle(video.title)
+        if(::titleView.isInitialized) titleView.text = cleanTitle(video.title)
         currentVideoUri = video.uri
 
         val mediaItem = MediaItem.fromUri(video.uri)
@@ -511,8 +580,8 @@ class VideoPlayerActivity : AppCompatActivity() {
         player?.prepare()
         player?.play()
 
-        subtitleView.visibility = View.GONE
-        applyAspectRatio()
+        if(::subtitleView.isInitialized) subtitleView.visibility = View.GONE
+        playerView.post { applyAspectRatio() }
     }
 
     private fun cleanTitle(title: String): String {
@@ -556,7 +625,6 @@ class VideoPlayerActivity : AppCompatActivity() {
                 var width = 16
                 var height = 9
 
-                // CHANGED: Use videoSize from Player interface
                 val videoSize = player?.videoSize
                 if (videoSize != null && videoSize.width > 0 && videoSize.height > 0) {
                     width = videoSize.width
@@ -569,18 +637,6 @@ class VideoPlayerActivity : AppCompatActivity() {
                 if (width <= 0) width = 16
                 if (height <= 0) height = 9
 
-                var ratio = width.toFloat() / height.toFloat()
-
-                if (ratio < 0.418410f) {
-                    width = 9
-                    height = 21
-                    ratio = width.toFloat() / height.toFloat()
-                } else if (ratio > 2.39f) {
-                    width = 24
-                    height = 10
-                    ratio = width.toFloat() / height.toFloat()
-                }
-
                 val aspectRatio = Rational(width, height)
                 val params = PictureInPictureParams.Builder()
                     .setAspectRatio(aspectRatio)
@@ -588,14 +644,8 @@ class VideoPlayerActivity : AppCompatActivity() {
 
                 enterPictureInPictureMode(params)
             } catch (e: Exception) {
-                Log.e("PiP", "Error entering PiP with custom ratio. Retrying with default.", e)
-                try {
-                    val builder = PictureInPictureParams.Builder()
-                    enterPictureInPictureMode(builder.build())
-                } catch (e2: Exception) {
-                    Log.e("PiP", "Fatal PiP Error", e2)
-                    Toast.makeText(this, "Cannot enter PiP mode", Toast.LENGTH_SHORT).show()
-                }
+                val builder = PictureInPictureParams.Builder()
+                enterPictureInPictureMode(builder.build())
             }
         } else {
             Toast.makeText(this, "PiP requires Android 8.0+", Toast.LENGTH_SHORT).show()
@@ -614,39 +664,40 @@ class VideoPlayerActivity : AppCompatActivity() {
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         if (isInPictureInPictureMode) {
-            topControls.visibility = View.GONE
-            bottomControls.visibility = View.GONE
-            centerControls.visibility = View.GONE
-            seekPeekContainer.visibility = View.GONE
-            ratioInfoChip.visibility = View.GONE
-            lockOverlay.visibility = View.GONE
-            centerInfoLayout.visibility = View.GONE
-            touchOverlay.visibility = View.GONE
+            if(::topControls.isInitialized) topControls.visibility = View.GONE
+            if(::bottomControls.isInitialized) bottomControls.visibility = View.GONE
+            if(::centerControls.isInitialized) centerControls.visibility = View.GONE
+            if(::seekPeekContainer.isInitialized) seekPeekContainer.visibility = View.GONE
+            if(::ratioInfoChip.isInitialized) ratioInfoChip.visibility = View.GONE
+            if(::lockOverlay.isInitialized) lockOverlay.visibility = View.GONE
+            if(::centerInfoLayout.isInitialized) centerInfoLayout.visibility = View.GONE
+            if(::touchOverlay.isInitialized) touchOverlay.visibility = View.GONE
             playerView.useController = false
         } else {
             showSystemUI()
-            touchOverlay.visibility = View.VISIBLE
+            if(::touchOverlay.isInitialized) touchOverlay.visibility = View.VISIBLE
             playerView.useController = false
         }
     }
-
-    // ===============================================
-    // DIALOG IMPLEMENTATIONS
-    // ===============================================
 
     private fun showOrientationDialog() {
         val (dialog, view) = createPlayerDialog(R.layout.dialog_orientation)
 
         view.findViewById<View>(R.id.btn_orient_auto).setOnClickListener {
+            // "Auto" acts as normal sensor rotation
             requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR
             resetAutoHideTimer()
             dialog.dismiss()
         }
+
+        // Ensure Landscape forces sensorLandscape to allow 180 flips
         view.findViewById<View>(R.id.btn_orient_landscape).setOnClickListener {
             requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             resetAutoHideTimer()
             dialog.dismiss()
         }
+
+        // Ensure Portrait forces sensorPortrait
         view.findViewById<View>(R.id.btn_orient_portrait).setOnClickListener {
             requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
             resetAutoHideTimer()
@@ -684,18 +735,26 @@ class VideoPlayerActivity : AppCompatActivity() {
 
     private fun applyAspectRatio() {
         val p = player ?: return
-        // CHANGED: Use videoSize from Player interface
-        val videoSize = p.videoSize
-        if (videoSize.width == 0 || videoSize.height == 0) return
+        val root = findViewById<View>(R.id.root_layout) ?: return
 
-        val viewWidth = findViewById<View>(R.id.root_layout).width
-        val viewHeight = findViewById<View>(R.id.root_layout).height
+        if (root.width == 0 || root.height == 0) {
+            root.post { applyAspectRatio() }
+            return
+        }
+
+        val videoSize = p.videoSize
         val params = playerView.layoutParams
 
-        if (viewHeight == 0) return
+        if (videoSize.width == 0 || videoSize.height == 0) {
+            params.width = FrameLayout.LayoutParams.MATCH_PARENT
+            params.height = FrameLayout.LayoutParams.MATCH_PARENT
+            playerView.layoutParams = params
+            return
+        }
 
+        val viewWidth = root.width
+        val viewHeight = root.height
         val screenRatio = viewWidth.toFloat() / viewHeight.toFloat()
-        playerView.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
 
         when (currentAspectRatioMode) {
             AspectRatioMode.BEST_FIT -> {
@@ -940,7 +999,7 @@ class VideoPlayerActivity : AppCompatActivity() {
         val (dialog, view) = createPlayerDialog(R.layout.dialog_playback_speed)
 
         val container = view.findViewById<LinearLayout>(R.id.container_speed_options)
-        val speeds = listOf(0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
+        val speeds = listOf(0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 2.25f, 2.5f, 2.75f, 3.0f)
 
         speeds.forEach { speed ->
             val btn = TextView(this)
@@ -982,7 +1041,7 @@ class VideoPlayerActivity : AppCompatActivity() {
 
                 withContext(Dispatchers.Main) {
                     val info = StringBuilder()
-                    info.append("File: ${cleanTitle(titleView.text.toString())}\n\n")
+                    if(::titleView.isInitialized) info.append("File: ${cleanTitle(titleView.text.toString())}\n\n")
                     info.append("Resolution: ${width} x ${height}\n\n")
                     info.append("Duration: ${formatDuration(duration)}\n\n")
                     if (bitrate > 0) info.append("Bitrate: ${bitrate / 1000} kbps")
@@ -1025,7 +1084,7 @@ class VideoPlayerActivity : AppCompatActivity() {
             private var isBrightness = false
 
             override fun onDoubleTap(e: MotionEvent): Boolean {
-                if (isLocked || player == null) return false
+                if (isLocked || player == null || !::playerView.isInitialized) return false
 
                 val width = playerView.width
                 val x = e.x
@@ -1041,9 +1100,9 @@ class VideoPlayerActivity : AppCompatActivity() {
             }
 
             override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
-                if (isLocked) {
+                if (isLocked && ::lockOverlay.isInitialized) {
                     lockOverlay.visibility = View.VISIBLE
-                    handler.postDelayed({ lockOverlay.visibility = View.GONE }, 3000)
+                    handler.postDelayed({ if(::lockOverlay.isInitialized) lockOverlay.visibility = View.GONE }, 3000)
                     return true
                 }
                 toggleControls()
@@ -1052,7 +1111,7 @@ class VideoPlayerActivity : AppCompatActivity() {
 
             override fun onScroll(e1: MotionEvent?, e2: MotionEvent, distanceX: Float, distanceY: Float): Boolean {
                 if (e1 == null || isLocked) return false
-                if (!isVolume && !isBrightness) {
+                if (!isVolume && !isBrightness && ::playerView.isInitialized) {
                     if (e1.x > playerView.width / 2) isVolume = true else isBrightness = true
                 }
 
@@ -1073,19 +1132,22 @@ class VideoPlayerActivity : AppCompatActivity() {
             }
         })
 
-        touchOverlay.setOnTouchListener { _, event ->
-            scaleGestureDetector.onTouchEvent(event)
-            if (scaleGestureDetector.isInProgress) return@setOnTouchListener true
+        if(::touchOverlay.isInitialized) {
+            touchOverlay.setOnTouchListener { _, event ->
+                scaleGestureDetector.onTouchEvent(event)
+                if (scaleGestureDetector.isInProgress) return@setOnTouchListener true
 
-            if (event.action == MotionEvent.ACTION_UP || event.action == MotionEvent.ACTION_CANCEL) {
-                handler.postDelayed(hideCenterInfoRunnable, 500)
-                scrollAccumulator = 0f
+                if (event.action == MotionEvent.ACTION_UP || event.action == MotionEvent.ACTION_CANCEL) {
+                    handler.postDelayed(hideCenterInfoRunnable, 500)
+                    scrollAccumulator = 0f
+                }
+                gestureDetector.onTouchEvent(event)
             }
-            gestureDetector.onTouchEvent(event)
         }
     }
 
     private fun showRatioChip(text: String) {
+        if(!::ratioInfoChip.isInitialized) return
         ratioInfoChip.text = text
         ratioInfoChip.visibility = View.VISIBLE
         handler.removeCallbacks(hideRatioChipRunnable)
@@ -1114,67 +1176,77 @@ class VideoPlayerActivity : AppCompatActivity() {
 
     private fun showCenterInfo(iconRes: Int, text: String) {
         handler.removeCallbacks(hideCenterInfoRunnable)
-        centerInfoLayout.visibility = View.VISIBLE
-        centerInfoIcon.setImageResource(iconRes)
-        centerInfoText.text = text
+        if(::centerInfoLayout.isInitialized) {
+            centerInfoLayout.visibility = View.VISIBLE
+            centerInfoIcon.setImageResource(iconRes)
+            centerInfoText.text = text
+        }
     }
 
     private fun lockScreen() {
         isLocked = true
         hideSystemUI()
-        lockOverlay.visibility = View.VISIBLE
-        handler.postDelayed({ lockOverlay.visibility = View.GONE }, 2000)
+        if(::lockOverlay.isInitialized) {
+            lockOverlay.visibility = View.VISIBLE
+            handler.postDelayed({ if(::lockOverlay.isInitialized) lockOverlay.visibility = View.GONE }, 2000)
+        }
         Toast.makeText(this, "Screen Locked", Toast.LENGTH_SHORT).show()
     }
 
     private fun unlockScreen() {
         isLocked = false
-        lockOverlay.visibility = View.GONE
+        if(::lockOverlay.isInitialized) lockOverlay.visibility = View.GONE
         showSystemUI()
         resetAutoHideTimer()
     }
 
     @SuppressLint("ClickableViewAccessibility")
     private fun setupHoldToSeek() {
-        prevButton.setOnTouchListener { _, event ->
-            if (isLocked) return@setOnTouchListener false
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    isSeeking = false
-                    handler.postDelayed({
-                        if (prevButton.isPressed) {
-                            isSeeking = true; seekDirection = -1; showRewindOverlay(); handler.post(seekRunnable)
-                        }
-                    }, 400)
-                    true
+        if(::prevButton.isInitialized) {
+            prevButton.setOnTouchListener { _, event ->
+                if (isLocked) return@setOnTouchListener false
+                when (event.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        isSeeking = false
+                        handler.postDelayed({
+                            if (prevButton.isPressed) {
+                                isSeeking = true; seekDirection = -1; showRewindOverlay(); handler.post(seekRunnable)
+                            }
+                        }, 400)
+                        true
+                    }
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        if (isSeeking) {
+                            isSeeking = false; if (::rewindOverlay.isInitialized) rewindOverlay.visibility = View.GONE; resetAutoHideTimer()
+                        } else handlePrevious()
+                        true
+                    }
+                    else -> false
                 }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    if (isSeeking) { isSeeking = false; rewindOverlay.visibility = View.GONE; resetAutoHideTimer() }
-                    else handlePrevious()
-                    true
-                }
-                else -> false
             }
         }
 
-        nextButton.setOnTouchListener { _, event ->
-            if (isLocked) return@setOnTouchListener false
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    isSeeking = false
-                    handler.postDelayed({
-                        if (nextButton.isPressed) {
-                            isSeeking = true; seekDirection = 1; showForwardOverlay(); handler.post(seekRunnable)
-                        }
-                    }, 400)
-                    true
+        if(::nextButton.isInitialized) {
+            nextButton.setOnTouchListener { _, event ->
+                if (isLocked) return@setOnTouchListener false
+                when (event.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        isSeeking = false
+                        handler.postDelayed({
+                            if (nextButton.isPressed) {
+                                isSeeking = true; seekDirection = 1; showForwardOverlay(); handler.post(seekRunnable)
+                            }
+                        }, 400)
+                        true
+                    }
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        if (isSeeking) {
+                            isSeeking = false; if (::forwardOverlay.isInitialized) forwardOverlay.visibility = View.GONE; resetAutoHideTimer()
+                        } else playNextVideo()
+                        true
+                    }
+                    else -> false
                 }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    if (isSeeking) { isSeeking = false; forwardOverlay.visibility = View.GONE; resetAutoHideTimer() }
-                    else playNextVideo()
-                    true
-                }
-                else -> false
             }
         }
     }
@@ -1201,17 +1273,22 @@ class VideoPlayerActivity : AppCompatActivity() {
             val target = (it.currentPosition + offsetMs).coerceIn(0, it.duration)
             it.seekTo(target)
             if (offsetMs < 0) showRewindOverlay() else showForwardOverlay()
-            seekBar.progress = target.toInt()
-            currentTimeView.text = formatDuration(target)
+            if(::seekBar.isInitialized) seekBar.progress = target.toInt()
+            if(::currentTimeView.isInitialized) currentTimeView.text = formatDuration(target)
             resetAutoHideTimer()
-            handler.postDelayed({ rewindOverlay.visibility = View.GONE; forwardOverlay.visibility = View.GONE }, 600)
+            handler.postDelayed({
+                if(::rewindOverlay.isInitialized) rewindOverlay.visibility = View.GONE
+                if(::forwardOverlay.isInitialized) forwardOverlay.visibility = View.GONE
+            }, 600)
         }
     }
 
-    private fun showRewindOverlay() { rewindOverlay.visibility = View.VISIBLE }
-    private fun showForwardOverlay() { forwardOverlay.visibility = View.VISIBLE }
+    private fun showRewindOverlay() { if(::rewindOverlay.isInitialized) rewindOverlay.visibility = View.VISIBLE }
+    private fun showForwardOverlay() { if(::forwardOverlay.isInitialized) forwardOverlay.visibility = View.VISIBLE }
 
     private fun setupSeekBar() {
+        if(!::seekBar.isInitialized) return
+
         seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (fromUser) {
@@ -1221,7 +1298,9 @@ class VideoPlayerActivity : AppCompatActivity() {
 
                     val width = seekBar!!.width - seekBar!!.paddingLeft - seekBar!!.paddingRight
                     val thumbPos = seekBar!!.paddingLeft + (width * seekBar!!.progress / seekBar!!.max)
-                    seekPeekContainer.x = seekBar!!.x + thumbPos - (seekPeekContainer.width / 2)
+
+                    val containerX = bottomControls.x + seekBar!!.x + thumbPos - (seekPeekContainer.width / 2)
+                    seekPeekContainer.x = containerX
 
                     if (seekPeekContainer.visibility != View.VISIBLE) {
                         seekPeekContainer.visibility = View.VISIBLE
@@ -1251,24 +1330,24 @@ class VideoPlayerActivity : AppCompatActivity() {
         controller.hide(WindowInsetsCompat.Type.systemBars())
         controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
 
-        topControls.visibility = View.GONE
-        bottomControls.visibility = View.GONE
-        centerControls.visibility = View.GONE
-
-        seekPeekContainer.visibility = View.GONE
-        ratioInfoChip.visibility = View.GONE
+        if(::topControls.isInitialized) topControls.visibility = View.GONE
+        if(::bottomControls.isInitialized) bottomControls.visibility = View.GONE
+        if(::centerControls.isInitialized) centerControls.visibility = View.GONE
+        if(::seekPeekContainer.isInitialized) seekPeekContainer.visibility = View.GONE
+        if(::ratioInfoChip.isInitialized) ratioInfoChip.visibility = View.GONE
     }
 
     private fun showSystemUI() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode) return
 
-        topControls.visibility = View.VISIBLE
-        bottomControls.visibility = View.VISIBLE
-        centerControls.visibility = View.VISIBLE
+        if(::topControls.isInitialized) topControls.visibility = View.VISIBLE
+        if(::bottomControls.isInitialized) bottomControls.visibility = View.VISIBLE
+        if(::centerControls.isInitialized) centerControls.visibility = View.VISIBLE
     }
 
     private fun toggleControls() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode) return
+        if (!::topControls.isInitialized) return
 
         if (topControls.visibility == View.VISIBLE) {
             hideSystemUI()
@@ -1331,7 +1410,6 @@ class VideoPlayerActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        // RELEASE MEDIA SESSION
         mediaSession?.release()
         mediaSession = null
 

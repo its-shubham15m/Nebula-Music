@@ -4,12 +4,10 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -45,7 +43,6 @@
             android:exported="true"
             android:launchMode="singleTask"
             android:theme="@style/Theme.NebulaPlayer">
-
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -63,7 +60,8 @@
             android:screenOrientation="sensorLandscape"
             android:supportsPictureInPicture="true"
             android:hardwareAccelerated="true"
-            android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout" />
+            android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout"
+            tools:ignore="DiscouragedApi" />
 
         <service
             android:name=".service.MusicService"

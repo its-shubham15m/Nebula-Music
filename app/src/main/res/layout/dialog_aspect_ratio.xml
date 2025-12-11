@@ -1,137 +1,146 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/background_overlay"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@android:color/transparent">
 
-    <LinearLayout
+    <com.google.android.material.card.MaterialCardView
         android:layout_width="360dp"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="16dp"
-        android:background="@drawable/subtitle_sheet_background"
-        android:orientation="vertical"
-        android:paddingHorizontal="16dp"
-        android:paddingVertical="16dp"
-        android:elevation="0dp"
+        android:layout_marginBottom="24dp"
+        app:cardBackgroundColor="#1F1F1F"
+        app:cardCornerRadius="24dp"
+        app:cardElevation="12dp"
+        app:strokeColor="#33FFFFFF"
+        app:strokeWidth="1dp"
         android:clickable="true"
         android:focusable="true">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Aspect Ratio"
-            android:textColor="#FFFFFF"
-            android:textSize="18sp"
-            android:textStyle="bold"
-            android:layout_marginBottom="24dp"
-            android:layout_gravity="center_horizontal"/>
-
-        <androidx.core.widget.NestedScrollView
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:scrollbars="vertical"
-            android:fadeScrollbars="false">
+            android:orientation="vertical"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="16dp">
 
-            <GridLayout
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Aspect Ratio"
+                android:textColor="#FFFFFF"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="24dp"
+                android:layout_gravity="center_horizontal"/>
+
+            <androidx.core.widget.NestedScrollView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:columnCount="2"
-                android:rowCount="5"
-                android:alignmentMode="alignMargins"
-                android:columnOrderPreserved="false"
-                android:useDefaultMargins="true">
+                android:scrollbars="vertical"
+                android:fadeScrollbars="false">
 
-                <Button
-                    android:id="@+id/btn_ar_best_fit"
-                    style="@style/Widget.AppCompat.Button.Borderless"
-                    android:layout_width="0dp"
+                <GridLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_columnWeight="1"
-                    android:text="Best Fit"
-                    android:textColor="#FFFFFF"
-                    android:background="@drawable/rounded_background_black_transparent"
-                    android:layout_margin="4dp"/>
+                    android:columnCount="2"
+                    android:rowCount="5"
+                    android:alignmentMode="alignMargins"
+                    android:columnOrderPreserved="false"
+                    android:useDefaultMargins="true">
 
-                <Button
-                    android:id="@+id/btn_ar_fit_screen"
-                    style="@style/Widget.AppCompat.Button.Borderless"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_columnWeight="1"
-                    android:text="Fit Screen"
-                    android:textColor="#FFFFFF"
-                    android:background="@drawable/rounded_background_black_transparent"
-                    android:layout_margin="4dp"/>
+                    <Button
+                        android:id="@+id/btn_ar_best_fit"
+                        style="@style/Widget.AppCompat.Button.Borderless"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_columnWeight="1"
+                        android:text="Best Fit"
+                        android:textColor="#FFFFFF"
+                        android:background="@drawable/rounded_background_black_transparent"
+                        android:layout_margin="4dp"/>
 
-                <Button
-                    android:id="@+id/btn_ar_fill"
-                    style="@style/Widget.AppCompat.Button.Borderless"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_columnWeight="1"
-                    android:text="Fill / Zoom"
-                    android:textColor="#FFFFFF"
-                    android:background="@drawable/rounded_background_black_transparent"
-                    android:layout_margin="4dp"/>
+                    <Button
+                        android:id="@+id/btn_ar_fit_screen"
+                        style="@style/Widget.AppCompat.Button.Borderless"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_columnWeight="1"
+                        android:text="Fit Screen"
+                        android:textColor="#FFFFFF"
+                        android:background="@drawable/rounded_background_black_transparent"
+                        android:layout_margin="4dp"/>
 
-                <Button
-                    android:id="@+id/btn_ar_16_9"
-                    style="@style/Widget.AppCompat.Button.Borderless"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_columnWeight="1"
-                    android:text="16:9"
-                    android:textColor="#FFFFFF"
-                    android:background="@drawable/rounded_background_black_transparent"
-                    android:layout_margin="4dp"/>
+                    <Button
+                        android:id="@+id/btn_ar_fill"
+                        style="@style/Widget.AppCompat.Button.Borderless"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_columnWeight="1"
+                        android:text="Fill / Zoom"
+                        android:textColor="#FFFFFF"
+                        android:background="@drawable/rounded_background_black_transparent"
+                        android:layout_margin="4dp"/>
 
-                <Button
-                    android:id="@+id/btn_ar_4_3"
-                    style="@style/Widget.AppCompat.Button.Borderless"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_columnWeight="1"
-                    android:text="4:3"
-                    android:textColor="#FFFFFF"
-                    android:background="@drawable/rounded_background_black_transparent"
-                    android:layout_margin="4dp"/>
+                    <Button
+                        android:id="@+id/btn_ar_16_9"
+                        style="@style/Widget.AppCompat.Button.Borderless"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_columnWeight="1"
+                        android:text="16:9"
+                        android:textColor="#FFFFFF"
+                        android:background="@drawable/rounded_background_black_transparent"
+                        android:layout_margin="4dp"/>
 
-                <Button
-                    android:id="@+id/btn_ar_18_9"
-                    style="@style/Widget.AppCompat.Button.Borderless"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_columnWeight="1"
-                    android:text="18:9"
-                    android:textColor="#FFFFFF"
-                    android:background="@drawable/rounded_background_black_transparent"
-                    android:layout_margin="4dp"/>
+                    <Button
+                        android:id="@+id/btn_ar_4_3"
+                        style="@style/Widget.AppCompat.Button.Borderless"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_columnWeight="1"
+                        android:text="4:3"
+                        android:textColor="#FFFFFF"
+                        android:background="@drawable/rounded_background_black_transparent"
+                        android:layout_margin="4dp"/>
 
-                <Button
-                    android:id="@+id/btn_ar_16_10"
-                    style="@style/Widget.AppCompat.Button.Borderless"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_columnWeight="1"
-                    android:text="16:10"
-                    android:textColor="#FFFFFF"
-                    android:background="@drawable/rounded_background_black_transparent"
-                    android:layout_margin="4dp"/>
+                    <Button
+                        android:id="@+id/btn_ar_18_9"
+                        style="@style/Widget.AppCompat.Button.Borderless"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_columnWeight="1"
+                        android:text="18:9"
+                        android:textColor="#FFFFFF"
+                        android:background="@drawable/rounded_background_black_transparent"
+                        android:layout_margin="4dp"/>
 
-                <Button
-                    android:id="@+id/btn_ar_cinema"
-                    style="@style/Widget.AppCompat.Button.Borderless"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_columnWeight="1"
-                    android:text="2.35:1"
-                    android:textColor="#FFFFFF"
-                    android:background="@drawable/rounded_background_black_transparent"
-                    android:layout_margin="4dp"/>
+                    <Button
+                        android:id="@+id/btn_ar_16_10"
+                        style="@style/Widget.AppCompat.Button.Borderless"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_columnWeight="1"
+                        android:text="16:10"
+                        android:textColor="#FFFFFF"
+                        android:background="@drawable/rounded_background_black_transparent"
+                        android:layout_margin="4dp"/>
 
-            </GridLayout>
-        </androidx.core.widget.NestedScrollView>
-    </LinearLayout>
+                    <Button
+                        android:id="@+id/btn_ar_cinema"
+                        style="@style/Widget.AppCompat.Button.Borderless"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_columnWeight="1"
+                        android:text="2.35:1"
+                        android:textColor="#FFFFFF"
+                        android:background="@drawable/rounded_background_black_transparent"
+                        android:layout_margin="4dp"/>
+
+                </GridLayout>
+            </androidx.core.widget.NestedScrollView>
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
 </FrameLayout>
