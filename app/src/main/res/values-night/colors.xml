@@ -4,7 +4,7 @@
     <color name="shuffle_card_background">#2D2D2D</color>
 
     <!-- Primary Colors for Dark Mode -->
-    <color name="colorPrimary">#FF8F87F1</color>
+    <color name="colorPrimary">#FF1581BF</color>
     <color name="colorPrimaryVariant">#FF3700B3</color>
     <color name="colorSecondary">#FF03DAC5</color>
     <color name="colorSecondaryVariant">#FF018786</color>
@@ -52,6 +52,6 @@
     <color name="selected_item">#334D4D4D</color>
 
     <!-- Dialog and UI specific colors for dark mode -->
-    <color name="button_positive">#FFBB86FC</color>
-    <color name="button_negative">#FF757575</color>
+    <color name="button_positive">#64B5F6</color>
+    <color name="button_negative">#B0BEC5</color>
 </resources>

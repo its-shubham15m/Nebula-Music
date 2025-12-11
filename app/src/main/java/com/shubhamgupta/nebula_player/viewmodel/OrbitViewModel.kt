@@ -21,7 +21,11 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import org.jsoup.Jsoup
+import java.net.HttpURLConnection
+import java.net.URL
+import java.net.URLEncoder
 import java.util.Calendar
 
 class OrbitViewModel(application: Application) : AndroidViewModel(application) {
@@ -41,9 +45,6 @@ class OrbitViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _videosData = MutableLiveData<List<Video>>()
     val videosData: LiveData<List<Video>> = _videosData
-
-    private val _lastWatched = MutableLiveData<Video?>()
-    val lastWatchedData: LiveData<Video?> = _lastWatched
 
     private val _isLoading = MutableLiveData<Boolean>()
     val isLoading: LiveData<Boolean> = _isLoading
@@ -73,7 +74,7 @@ class OrbitViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun getGenerativeModel(): GenerativeModel {
         return GenerativeModel(
-            modelName = "gemini-1.5-flash",
+            modelName = "gemini-2.0-flash",
             apiKey = getApiKey()
         )
     }
@@ -115,17 +116,10 @@ class OrbitViewModel(application: Application) : AndroidViewModel(application) {
             val topArtists = sortedArtists.take(15).shuffled()
             _artistData.postValue(topArtists)
 
-            val artistsWithImages = withContext(Dispatchers.IO) {
-                topArtists.map { artist ->
-                    async {
-                        val url = fetchArtistImageFromWeb(artist.name)
-                        artist.copy(imageUrl = url)
-                    }
-                }.awaitAll()
-            }
-            _artistData.postValue(artistsWithImages)
+            // 4. Videos
+            _videosData.postValue(allVideos.shuffled().take(15))
 
-            // 4. AI Playlists Cards
+            // 5. AI Playlists Cards
             val suggestions = listOf(
                 OrbitCard("ai_1", "Bollywood Mush", "Sentimental B-Town hits", "bollywood_mush.png", "PLAYLIST_AI", "Bollywood, Romantic, Arijit Singh, Shreya Ghoshal, Soft, Hindi, Love"),
                 OrbitCard("ai_2", "1AM Feels", "For the late night thoughts", "1am_feels.png", "PLAYLIST_AI", "Sad, Lo-fi, Slow, Melancholic, Acoustic, Night, Lonely"),
@@ -139,13 +133,16 @@ class OrbitViewModel(application: Application) : AndroidViewModel(application) {
             )
             _aiPlaylists.postValue(suggestions)
 
-            // 5. Videos
-            _videosData.postValue(allVideos.shuffled().take(15))
-
-            // 6. Last Watched
-            if (allVideos.isNotEmpty()) {
-                _lastWatched.postValue(allVideos.first())
+            // 6. Fetch Artist Images (Using Deezer API now to get FACES not COVERS)
+            val artistsWithImages = withContext(Dispatchers.IO) {
+                topArtists.map { artist ->
+                    async {
+                        val url = fetchBestArtistImage(artist.name)
+                        artist.copy(imageUrl = url)
+                    }
+                }.awaitAll()
             }
+            _artistData.postValue(artistsWithImages)
 
             isDataLoaded = true
             _isLoading.postValue(false)
@@ -154,7 +151,8 @@ class OrbitViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun extractArtistsFromSongs(songs: List<Song>): List<ArtistCard> {
         val artistMap = mutableMapOf<String, Int>()
-        val regex = Regex("[,&]|\\s+ft\\.?\\s+|\\s+feat\\.?\\s+", RegexOption.IGNORE_CASE)
+        // Improved Regex: Keeps "Amitabh Bhattacharya" together, splits "Arijit Singh, Pritam"
+        val regex = Regex("[,;|]\\s+|\\s+ft\\.?\\s+|\\s+feat\\.?\\s+|\\s+&\\s+", RegexOption.IGNORE_CASE)
 
         songs.forEach { song ->
             val rawArtist = song.artist ?: "Unknown"
@@ -162,7 +160,8 @@ class OrbitViewModel(application: Application) : AndroidViewModel(application) {
                 val parts = rawArtist.split(regex)
                 parts.forEach { part ->
                     val cleanName = part.trim()
-                    if (cleanName.length > 2 && !cleanName.all { it.isDigit() }) {
+                    // Filter out garbage data
+                    if (cleanName.length > 2 && !cleanName.all { it.isDigit() } && !cleanName.contains("Unknown", true)) {
                         artistMap[cleanName] = artistMap.getOrDefault(cleanName, 0) + 1
                     }
                 }
@@ -188,7 +187,7 @@ class OrbitViewModel(application: Application) : AndroidViewModel(application) {
                 _selectedPlaylistSongs.postValue(artistSongs)
             }
 
-            val imageUrl = fetchArtistImageFromWeb(artistName)
+            val imageUrl = fetchBestArtistImage(artistName)
             withContext(Dispatchers.Main) {
                 _selectedArtistImage.postValue(imageUrl)
                 _isLoading.postValue(false)
@@ -196,28 +195,76 @@ class OrbitViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun fetchArtistImageFromWeb(artistName: String): String {
+    /**
+     * PRIMARY SOURCE: Deezer API
+     * Why? It returns 'picture_xl' which is the Artist's profile photo (Face).
+     * It does NOT return album covers.
+     */
+    private suspend fun fetchBestArtistImage(artistName: String): String {
+        var url = fetchArtistImageFromDeezer(artistName)
+        if (url.isEmpty()) {
+            url = fetchImageFromBing(artistName) // Fallback
+        }
+        return url
+    }
+
+    private fun fetchArtistImageFromDeezer(artistName: String): String {
         return try {
-            val query = "$artistName singer music artist"
-            val url = "https://www.bing.com/images/search?q=$query&first=1"
+            val encodedName = URLEncoder.encode(artistName, "UTF-8")
+            val urlString = "https://api.deezer.com/search/artist?q=$encodedName&limit=1"
 
-            val doc = Jsoup.connect(url)
-                .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.60 Safari/537.36")
-                .timeout(5000)
-                .get()
+            val url = URL(urlString)
+            val connection = url.openConnection() as HttpURLConnection
+            connection.requestMethod = "GET"
+            connection.connectTimeout = 5000
 
-            val element = doc.select("img.mimg").first()
-            element?.attr("src") ?: ""
+            val inputStream = connection.inputStream
+            val response = inputStream.bufferedReader().use { it.readText() }
+
+            val jsonObject = JSONObject(response)
+            val dataArray = jsonObject.optJSONArray("data")
+
+            if (dataArray != null && dataArray.length() > 0) {
+                val artistObj = dataArray.getJSONObject(0)
+                // 'picture_xl' is the high-res artist photo
+                return artistObj.optString("picture_xl", artistObj.optString("picture_medium"))
+            }
+            ""
         } catch (e: Exception) {
-            Log.e("OrbitViewModel", "Error scraping image: ${e.message}")
+            Log.e("OrbitImage", "Deezer API failed: ${e.message}")
             ""
         }
     }
 
-    // --- PLAYLIST LOGIC & RECOMMENDATIONS ---
+    private fun fetchImageFromBing(artistName: String): String {
+        return try {
+            // Updated query to strictly ask for 'face' or 'photoshoot'
+            val query = "$artistName singer official photoshoot face"
+            val url = "https://www.bing.com/images/search?q=$query&first=1"
+
+            val doc = Jsoup.connect(url)
+                .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.0.0 Safari/537.36")
+                .timeout(5000)
+                .get()
+
+            // Robust selector for Bing Images
+            val element = doc.select("img.mimg").first()
+                ?: doc.select("div.img_cont img").first()
+
+            var src = element?.attr("src") ?: element?.attr("data-src") ?: ""
+            if (src.startsWith("//")) {
+                src = "https:$src"
+            }
+            src
+        } catch (e: Exception) {
+            Log.e("OrbitImage", "Bing fetch failed: ${e.message}")
+            ""
+        }
+    }
+
+    // --- PLAYLIST LOGIC ---
 
     fun loadPlaylistDetails(mood: String, title: String, forceRefresh: Boolean = false) {
-        // FIX: Check if we already have data for this title to prevent auto-refresh
         if (!forceRefresh && title == lastLoadedPlaylistTitle && _selectedPlaylistSongs.value?.isNotEmpty() == true) {
             return
         }
@@ -231,7 +278,6 @@ class OrbitViewModel(application: Application) : AndroidViewModel(application) {
             viewModelScope.launch(Dispatchers.IO) {
                 val allSongs = SongRepository.getAllSongs(getApplication())
                 val playlistIds = songs.map { it.id }.toSet()
-
                 val playlistArtists = songs.mapNotNull { it.artist }.distinct()
 
                 val similarSongs = allSongs.filter {
@@ -274,43 +320,62 @@ class OrbitViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             val allSongs = SongRepository.getAllSongs(context)
-            val simplifiedSongList = allSongs.take(500).joinToString("\n") { "${it.id}|${it.title}|${it.artist}" }
+            val simplifiedSongList = allSongs.take(600).joinToString("\n") { "${it.id}|${it.title}|${it.artist}" }
 
             val currentKey = getApiKey()
             if (currentKey.isEmpty()) {
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(context, "Please set Gemini API Key", Toast.LENGTH_LONG).show()
-                    callback(allSongs.shuffled().take(40))
+                    Toast.makeText(context, "Please set Gemini API Key in Settings", Toast.LENGTH_LONG).show()
+                    callback(fallbackKeywordSearch(allSongs, mood))
                 }
                 return@launch
             }
 
+            // Spotify-Style Prompt
             val prompt = """
-                You are an expert music curator. Input Mood: '$mood'
-                Local Library: $simplifiedSongList
-                Select 40 songs matching the mood. Return ONLY JSON array of IDs.
+                You are a senior music curator at Spotify. Create a playlist for the mood: '$mood'.
+                Input: List of songs (ID|Title|Artist).
+                Task: Select 30 songs that match the *vibe* and *emotion* of the mood.
+                Guidelines:
+                1. Match the 'feeling' (e.g., Sad = Slow, Acoustic; Party = Upbeat).
+                2. Return ONLY a JSON array of Song IDs (Long values). Example: [101, 202, 303]
+                
+                Songs:
+                $simplifiedSongList
             """.trimIndent()
 
             try {
                 val model = getGenerativeModel()
                 val response = model.generateContent(prompt)
-                val responseText = response.text?.replace("```json", "")?.replace("```", "")?.trim()
+                val responseText = response.text
+                    ?.replace("```json", "")
+                    ?.replace("```", "")
+                    ?.trim()
+
                 val type = object : TypeToken<List<Long>>() {}.type
                 val ids: List<Long> = Gson().fromJson(responseText, type)
-                val matchedSongs = allSongs.filter { ids.contains(it.id) }
+                val matchedSongs = ids.mapNotNull { id -> allSongs.find { it.id == id } }
 
                 savePlaylistToCache(playlistTitle, ids)
                 withContext(Dispatchers.Main) { callback(matchedSongs) }
+
             } catch (e: Exception) {
-                val keywords = mood.split(", ")
-                val fallback = allSongs.filter { s ->
-                    keywords.any { k -> s.title.contains(k, true) || (s.artist?.contains(k, true) == true) }
-                }.take(40)
+                Log.e("OrbitAI", "AI Gen Failed: ${e.message}")
                 withContext(Dispatchers.Main) {
-                    callback(if(fallback.isNotEmpty()) fallback else allSongs.shuffled().take(40))
+                    callback(fallbackKeywordSearch(allSongs, mood))
                 }
             }
         }
+    }
+
+    private fun fallbackKeywordSearch(allSongs: List<Song>, mood: String): List<Song> {
+        val keywords = mood.split(", ", " ")
+        val filtered = allSongs.filter { s ->
+            keywords.any { k ->
+                s.title.contains(k, true) || (s.artist?.contains(k, true) == true)
+            }
+        }
+        return if (filtered.size > 5) filtered.take(40) else allSongs.shuffled().take(40)
     }
 
     fun getSimilarSongs(seedSong: Song, callback: (List<Song>) -> Unit) {
@@ -319,6 +384,7 @@ class OrbitViewModel(application: Application) : AndroidViewModel(application) {
             val similar = allSongs.filter {
                 (it.artist == seedSong.artist && it.id != seedSong.id)
             }.shuffled().take(39).toMutableList()
+
             similar.add(0, seedSong)
             withContext(Dispatchers.Main) { callback(similar) }
         }

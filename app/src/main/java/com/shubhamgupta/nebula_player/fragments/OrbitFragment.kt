@@ -41,14 +41,13 @@ class OrbitFragment : Fragment() {
     private lateinit var chipMusic: MaterialCardView
     private lateinit var chipVideo: MaterialCardView
 
-    // Containers for Content
+    // Containers
     private lateinit var containerTimeWarp: LinearLayout
     private lateinit var containerAiPlaylists: LinearLayout
     private lateinit var containerVideos: LinearLayout
     private lateinit var containerArtists: LinearLayout
-    private lateinit var cardLastWatched: MaterialCardView
 
-    // Wrapper Layouts for Reordering
+    // Wrappers
     private lateinit var mainContentContainer: LinearLayout
     private lateinit var layoutHeaderBlock: LinearLayout
     private lateinit var layoutSectionTimeWarp: LinearLayout
@@ -73,7 +72,6 @@ class OrbitFragment : Fragment() {
         setupInteractions()
         observeViewModel()
 
-        // Only load if not loaded before (prevents refresh on back)
         if (!viewModel.isDataLoaded) {
             viewModel.loadOrbitData()
         }
@@ -100,15 +98,12 @@ class OrbitFragment : Fragment() {
         chipAll = view.findViewById(R.id.chip_all)
         chipMusic = view.findViewById(R.id.chip_music)
         chipVideo = view.findViewById(R.id.chip_video)
-        cardLastWatched = view.findViewById(R.id.card_last_watched)
 
-        // Content Containers
         containerTimeWarp = view.findViewById(R.id.container_time_warp)
         containerAiPlaylists = view.findViewById(R.id.container_echo_chamber)
         containerVideos = view.findViewById(R.id.container_stellar)
         containerArtists = view.findViewById(R.id.container_artists)
 
-        // Wrapper Layouts (For shuffling)
         mainContentContainer = view.findViewById(R.id.main_content_container)
         layoutHeaderBlock = view.findViewById(R.id.layout_header_block)
         layoutSectionTimeWarp = view.findViewById(R.id.layout_section_time_warp)
@@ -122,12 +117,6 @@ class OrbitFragment : Fragment() {
         chipMusic.setOnClickListener { updateFilter("MUSIC") }
         chipVideo.setOnClickListener { updateFilter("VIDEO") }
 
-        cardLastWatched.setOnClickListener {
-            val video = viewModel.lastWatchedData.value
-            if (video != null) playVideo(video)
-        }
-
-        // Pull to refresh logic
         swipeRefresh.setOnRefreshListener {
             viewModel.loadOrbitData(forceRefresh = true)
             randomizeSectionOrder()
@@ -135,13 +124,11 @@ class OrbitFragment : Fragment() {
     }
 
     private fun randomizeSectionOrder() {
-        // Detach views
         mainContentContainer.removeView(layoutSectionTimeWarp)
         mainContentContainer.removeView(layoutSectionArtists)
         mainContentContainer.removeView(layoutSectionEcho)
         mainContentContainer.removeView(layoutSectionStellar)
 
-        // Shuffle
         val sections = listOf(
             layoutSectionTimeWarp,
             layoutSectionArtists,
@@ -149,7 +136,6 @@ class OrbitFragment : Fragment() {
             layoutSectionStellar
         ).shuffled()
 
-        // Re-attach in new order
         sections.forEach { section ->
             mainContentContainer.addView(section)
         }
@@ -157,7 +143,6 @@ class OrbitFragment : Fragment() {
 
     private fun observeViewModel() {
         viewModel.isLoading.observe(viewLifecycleOwner) { isLoading ->
-            // Only show overlay on initial load, use SwipeIndicator for refresh
             if(isLoading && !swipeRefresh.isRefreshing) {
                 loadingOverlay?.visibility = View.VISIBLE
             } else {
@@ -201,17 +186,6 @@ class OrbitFragment : Fragment() {
                 layoutSectionStellar.visibility = View.GONE
             }
         }
-
-        viewModel.lastWatchedData.observe(viewLifecycleOwner) { video ->
-            if (video != null && currentFilter == "VIDEO") {
-                cardLastWatched.visibility = View.VISIBLE
-                view?.findViewById<TextView>(R.id.tv_last_watched_title)?.text = video.title
-                val img = view?.findViewById<ImageView>(R.id.img_last_watched_thumb)
-                if (img != null) Glide.with(this).load(video.uri).into(img)
-            } else {
-                cardLastWatched.visibility = View.GONE
-            }
-        }
     }
 
     private fun populateSongs(container: LinearLayout, songs: List<Song>) {
@@ -243,7 +217,6 @@ class OrbitFragment : Fragment() {
             view.findViewById<TextView>(R.id.tv_subtitle).text = "${artist.songCount} Songs"
             val img = view.findViewById<ImageView>(R.id.img_art)
 
-            // Check for Web Scraped URL
             if (artist.imageUrl.isNotEmpty()) {
                 Glide.with(this)
                     .load(artist.imageUrl)
@@ -253,7 +226,6 @@ class OrbitFragment : Fragment() {
                     .error(R.drawable.default_album_art)
                     .into(img)
             } else {
-                // Default until loaded
                 img.setImageResource(R.drawable.default_album_art)
             }
 

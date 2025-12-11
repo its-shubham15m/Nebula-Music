@@ -9,7 +9,7 @@
     <color name="teal_700">#FF018786</color>
 
     <!-- Primary Colors -->
-    <color name="colorPrimary">#FF8F87F1</color>
+    <color name="colorPrimary">#FF1581BF</color>
     <color name="colorPrimaryVariant">#FF3700B3</color>
     <color name="colorSecondary">#FF03DAC5</color>
     <color name="colorSecondaryVariant">#FF018786</color>
@@ -42,11 +42,11 @@
     <color name="grey_dark">#FF424242</color>
 
     <!-- Primary Color (using the light purple from your scheme) -->
-    <color name="primary_color">#FFBB86FC</color>
+    <color name="primary_color">#FF1581BF</color>
 
     <!-- Additional colors for better UI contrast -->
     <color name="primary_light">#FFE9DDFF</color>
-    <color name="primary_dark">#FF8A61C9</color>
+    <color name="primary_dark">#FF5459AC</color>
 
     <!-- Status and accent colors -->
     <color name="colorRed">#FFCF6679</color>
@@ -69,8 +69,8 @@
     <color name="error_red">#FFFF0000</color>
 
     <!-- Dialog and UI specific colors -->
-    <color name="button_positive">#FF6200EE</color>
-    <color name="button_negative">#FF757575</color>
+    <color name="button_positive">#1581BF</color>
+    <color name="button_negative">#9E9E9E</color>
 
     <!-- Dialog background -->
     <color name="dialog_background">#FFFFFFFF</color>
