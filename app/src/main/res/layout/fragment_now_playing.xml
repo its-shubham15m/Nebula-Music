@@ -7,12 +7,12 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:fitsSystemWindows="false"
-    android:background="@color/colorBackground">
+    android:background="@color/black">
 
     <ImageView
         android:id="@+id/background_gradient"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
+        android:layout_height="match_parent"
         android:scaleType="centerCrop"
         android:alpha="0.3"
         app:layout_constraintTop_toTopOf="parent"
@@ -100,20 +100,45 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <com.google.android.material.imageview.ShapeableImageView
-            android:id="@+id/album_art"
+        <FrameLayout
+            android:id="@+id/album_art_container"
             android:layout_width="0dp"
             android:layout_height="0dp"
-            android:scaleType="centerCrop"
-            android:src="@drawable/default_album_art"
-            app:shapeAppearanceOverlay="@style/ShapeAppearance.App.CornerRound"
             app:layout_constraintDimensionRatio="1:1"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintWidth_percent="0.9"
-            app:layout_constraintWidth_max="400dp"
-            android:contentDescription="Album Art"/>
+            app:layout_constraintWidth_max="400dp">
+
+            <com.google.android.material.imageview.ShapeableImageView
+                android:id="@+id/album_art_prev"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="centerCrop"
+                android:visibility="invisible"
+                app:shapeAppearanceOverlay="@style/ShapeAppearance.App.CornerRound"
+                android:contentDescription="Previous Album Art"/>
+
+            <com.google.android.material.imageview.ShapeableImageView
+                android:id="@+id/album_art_next"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="centerCrop"
+                android:visibility="invisible"
+                app:shapeAppearanceOverlay="@style/ShapeAppearance.App.CornerRound"
+                android:contentDescription="Next Album Art"/>
+
+            <com.google.android.material.imageview.ShapeableImageView
+                android:id="@+id/album_art"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="centerCrop"
+                android:src="@drawable/default_album_art"
+                app:shapeAppearanceOverlay="@style/ShapeAppearance.App.CornerRound"
+                android:contentDescription="Album Art"/>
+
+        </FrameLayout>
 
         <TextView
             android:id="@+id/song_title"
@@ -129,7 +154,7 @@
             android:textSize="24sp"
             android:textStyle="bold"
             android:textColor="@color/white"
-            app:layout_constraintTop_toBottomOf="@id/album_art"
+            app:layout_constraintTop_toBottomOf="@id/album_art_container"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             tools:text="Song Title" />
@@ -184,8 +209,8 @@
         android:alpha="0"
         app:layout_constraintTop_toTopOf="@id/art_info_container"
         app:layout_constraintBottom_toBottomOf="@id/art_info_container"
-        app:layout_constraintStart_toStartOf="@id/art_info_container"
-        app:layout_constraintEnd_toEndOf="@id/art_info_container">
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
 
         <androidx.constraintlayout.widget.ConstraintLayout
             android:layout_width="match_parent"
@@ -242,19 +267,15 @@
 
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/lyrics_recycler_view"
-                android:layout_width="0dp"
-                android:layout_height="0dp"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
                 android:clipToPadding="false"
                 android:scrollbars="none"
                 android:visibility="gone"
                 android:requiresFadingEdge="vertical"
                 android:fadingEdgeLength="50dp"
                 android:overScrollMode="never"
-                tools:listitem="@layout/item_lyric"
-                app:layout_constraintTop_toTopOf="parent"
-                app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintEnd_toEndOf="parent"/>
+                tools:listitem="@layout/item_lyric"/>
         </androidx.constraintlayout.widget.ConstraintLayout>
 
     </androidx.cardview.widget.CardView>

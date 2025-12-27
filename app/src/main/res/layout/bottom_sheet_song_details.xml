@@ -1,179 +1,198 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/bottom_sheet_song_details"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:background="@color/colorSurface">
+    android:background="@android:color/transparent">
 
-    <!-- Header Section -->
-    <RelativeLayout
+    <com.google.android.material.card.MaterialCardView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
-        android:paddingHorizontal="24dp"
-        android:paddingBottom="12dp">
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="DETAILS"
-            android:textSize="12sp"
-            android:textStyle="bold"
-            android:letterSpacing="0.15"
-            android:layout_centerInParent="true"
-            android:textColor="?android:attr/textColorSecondary" />
-
-        <ImageButton
-            android:id="@+id/btn_close_sheet"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:src="@drawable/ic_close"
-            app:tint="?attr/colorOnSurface"
-            android:layout_alignParentEnd="true"
-            android:layout_centerVertical="true"
-            android:contentDescription="Close" />
-    </RelativeLayout>
-
-    <!-- Scrollable Content -->
-    <ScrollView
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:scrollbars="vertical">
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginHorizontal="24dp"
+        android:layout_marginBottom="24dp"
+        app:cardBackgroundColor="#1F1F1F"
+        app:cardCornerRadius="24dp"
+        app:cardElevation="12dp"
+        app:strokeColor="#33FFFFFF"
+        app:strokeWidth="1dp"
+        android:clickable="true"
+        android:focusable="true">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:gravity="center_horizontal"
-            android:paddingHorizontal="24dp">
+            android:paddingHorizontal="20dp"
+            android:paddingTop="20dp"
+            android:paddingBottom="16dp">
 
-            <!-- Album Art Card (Square) -->
-            <com.google.android.material.card.MaterialCardView
-                android:layout_width="240dp"
-                android:layout_height="240dp"
-                app:cardCornerRadius="12dp"
-                app:cardElevation="8dp"
-                android:layout_marginTop="16dp"
-                android:layout_marginBottom="24dp">
-
-                <ImageView
-                    android:id="@+id/sheet_album_art"
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:scaleType="centerCrop"
-                    android:src="@drawable/default_album_art" />
-            </com.google.android.material.card.MaterialCardView>
-
-            <!-- Song Title & Artist -->
-            <TextView
-                android:id="@+id/sheet_song_title"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Song Title"
-                android:textSize="20sp"
-                android:textStyle="bold"
-                android:gravity="center"
-                android:textColor="?attr/colorOnSurface"
-                android:ellipsize="end"
-                android:maxLines="2" />
-
-            <TextView
-                android:id="@+id/sheet_song_artist"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Artist Name"
-                android:textSize="16sp"
-                android:gravity="center"
-                android:textColor="?android:attr/textColorSecondary"
-                android:layout_marginTop="4dp"
-                android:ellipsize="end"
-                android:maxLines="1" />
-
-            <TextView
-                android:id="@+id/sheet_song_album"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Album Name"
-                android:textSize="14sp"
-                android:gravity="center"
-                android:alpha="0.7"
-                android:textColor="?android:attr/textColorSecondary"
-                android:layout_marginTop="2dp"
-                android:ellipsize="end"
-                android:maxLines="1" />
-
-            <!-- Action Buttons -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
-                android:gravity="center"
-                android:layout_marginTop="24dp"
-                android:layout_marginBottom="32dp">
+                android:gravity="center_vertical"
+                android:layout_marginBottom="8dp">
 
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btn_share_song"
-                    style="@style/Widget.Material3.Button.TonalButton"
+                <TextView
                     android:layout_width="0dp"
-                    android:layout_height="50dp"
+                    android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="Share"
-                    android:layout_marginEnd="8dp"
-                    app:icon="@drawable/ic_share"
-                    app:iconGravity="textStart" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btn_add_to_playlist"
-                    style="@style/Widget.Material3.Button.TonalButton"
-                    android:layout_width="0dp"
-                    android:layout_height="50dp"
-                    android:layout_weight="1"
-                    android:text="Playlist"
-                    android:layout_marginStart="8dp"
-                    app:icon="@drawable/ic_playlist"
-                    app:iconGravity="textStart" />
+                    android:text="Song Details"
+                    android:textSize="20sp"
+                    android:textStyle="bold"
+                    android:textColor="#FFFFFF" />
             </LinearLayout>
 
-            <!-- Metadata Section Header -->
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="FILE INFORMATION"
-                android:textSize="11sp"
-                android:letterSpacing="0.1"
-                android:textStyle="bold"
-                android:textColor="?android:attr/textColorSecondary"
-                android:alpha="0.7"
-                android:layout_marginBottom="12dp" />
-
-            <!-- Divider -->
             <View
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
-                android:background="?android:attr/listDivider"
-                android:alpha="0.1"
-                android:layout_marginBottom="12dp"/>
+                android:background="#1AFFFFFF"
+                android:layout_marginBottom="4dp"/>
 
-            <!-- Metadata Rows Container -->
-            <LinearLayout
-                android:id="@+id/sheet_metadata_container"
+            <ScrollView
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical">
-                <!-- Rows will be injected here by Kotlin -->
-            </LinearLayout>
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:scrollbars="none"
+                android:layout_marginBottom="16dp">
 
-            <!-- Bottom Spacer -->
-            <View
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:gravity="center_horizontal">
+
+                    <com.google.android.material.card.MaterialCardView
+                        android:layout_width="200dp"
+                        android:layout_height="200dp"
+                        app:cardCornerRadius="16dp"
+                        app:cardElevation="4dp"
+                        app:strokeColor="#33FFFFFF"
+                        app:strokeWidth="1dp"
+                        android:layout_marginTop="8dp"
+                        android:layout_marginBottom="12dp">
+
+                        <ImageView
+                            android:id="@+id/sheet_album_art"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:scaleType="centerCrop"
+                            android:src="@drawable/default_album_art" />
+                    </com.google.android.material.card.MaterialCardView>
+
+                    <TextView
+                        android:id="@+id/sheet_song_title"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Song Title"
+                        android:textSize="22sp"
+                        android:textStyle="bold"
+                        android:gravity="center"
+                        android:textColor="#FFFFFF"
+                        android:ellipsize="end"
+                        android:maxLines="2" />
+
+                    <TextView
+                        android:id="@+id/sheet_song_artist"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Artist Name"
+                        android:textSize="16sp"
+                        android:gravity="center"
+                        android:textColor="#B3FFFFFF"
+                        android:layout_marginTop="4dp"
+                        android:ellipsize="end"
+                        android:maxLines="1" />
+
+                    <TextView
+                        android:id="@+id/sheet_song_album"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Album Name"
+                        android:textSize="14sp"
+                        android:gravity="center"
+                        android:alpha="0.7"
+                        android:textColor="#80FFFFFF"
+                        android:layout_marginTop="2dp"
+                        android:ellipsize="end"
+                        android:maxLines="1" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center"
+                        android:layout_marginTop="8dp"
+                        android:layout_marginBottom="8dp">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_share_song"
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                            android:layout_width="0dp"
+                            android:layout_height="50dp"
+                            android:layout_weight="1"
+                            android:text="Share"
+                            android:textColor="#FFFFFF"
+                            android:layout_marginEnd="8dp"
+                            app:strokeColor="#33FFFFFF"
+                            app:icon="@drawable/ic_share"
+                            app:iconTint="#FFFFFF"
+                            app:iconGravity="textStart"
+                            app:cornerRadius="25dp"/>
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_add_to_playlist"
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                            android:layout_width="0dp"
+                            android:layout_height="50dp"
+                            android:layout_weight="1"
+                            android:text="Playlist"
+                            android:textColor="#FFFFFF"
+                            android:layout_marginStart="8dp"
+                            app:strokeColor="#33FFFFFF"
+                            app:icon="@drawable/ic_playlist"
+                            app:iconTint="#FFFFFF"
+                            app:iconGravity="textStart"
+                            app:cornerRadius="25dp"/>
+                    </LinearLayout>
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="FILE INFORMATION"
+                        android:textSize="11sp"
+                        android:letterSpacing="0.1"
+                        android:textStyle="bold"
+                        android:textColor="#80FFFFFF"
+                        android:layout_marginBottom="12dp" />
+
+                    <LinearLayout
+                        android:id="@+id/sheet_metadata_container"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical">
+                    </LinearLayout>
+
+                </LinearLayout>
+            </ScrollView>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_close_details_bottom"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                 android:layout_width="match_parent"
-                android:layout_height="30dp"/>
+                android:layout_height="52dp"
+                android:text="CLOSE"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold"
+                android:textAllCaps="true"
+                android:textSize="14sp"
+                app:strokeColor="#33FFFFFF"
+                app:strokeWidth="1dp"
+                app:cornerRadius="26dp"
+                app:rippleColor="#33FFFFFF" />
 
         </LinearLayout>
-    </ScrollView>
-</LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+</FrameLayout>

@@ -1,0 +1,23 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    tools:ignore="VectorRaster">
+
+  <group
+      android:pivotX="12"
+      android:pivotY="12"
+      android:rotation="90">
+
+    <path
+        android:pathData="M3,4v16M7.5,4v13M12,4v13m4.5,-13v13M21,4v16M7.5,20h0.009M12,20h0.009m4.491,0h0.009"
+        android:strokeLineJoin="round"
+        android:strokeWidth="1.5"
+        android:fillColor="#00000000"
+        android:strokeColor="#000000"
+        android:strokeLineCap="round"/>
+
+  </group>
+</vector>
